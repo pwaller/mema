@@ -5,3 +5,5 @@
 
 /asan
 /llvm
+
+/.envrc
