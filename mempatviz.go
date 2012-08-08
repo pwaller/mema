@@ -62,17 +62,52 @@ func (d ProgramData) RegionID(addr uint64) int {
 	panic("")
 }
 
-func min(a, b int64) int64 {
-if b < a {
-return b
-}
-return a
+func (d ProgramData) ActiveRegionIDs() []int {
+	active := make(map[int] bool)
+	for i := range d.access {
+		active[d.RegionID(d.access[i].Addr)] = true
+	}
+	result := make([]int, 0)
+	for k, _ := range active {
+		result = append(result, k)
+	}
+	return result
 }
 
-func (data ProgramData) Draw(start, N int64, minAddr, widthAddr uint64) bool {
+func min(a, b int64) int64 { if b < a { return b }; return a }
+
+func (data ProgramData) Draw(start, N int64, region_id int) bool {
+
+	//region := data.region[region_id]
+
+	var minAddr, maxAddr uint64 = math.MaxUint64, 0
+
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		r := data.access[pos]
-		x := float32(r.Addr - minAddr) / float32(widthAddr)
+		if data.RegionID(r.Addr) != region_id { continue }
+		if r.Addr < minAddr {
+			minAddr = 4096 * (r.Addr / 4096)
+		}
+		if r.Addr > maxAddr {
+			maxAddr = 4096 * (r.Addr / 4096 + 1)
+		}
+	}
+
+	width := maxAddr - minAddr
+
+	for p := uint64(0); p < width; p += 4096 {
+		x := float32(p) / float32(width)
+		x = (x - 0.5) * 4
+		gl.Color4d(0, 0, 1, 1)
+		gl.Vertex3f(x, -2, -10)
+		gl.Vertex3f(x, 2, -10)
+	}
+
+	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
+		r := data.access[pos]
+		i := data.RegionID(r.Addr)
+		if i != region_id { continue }
+		x := float32(r.Addr - minAddr) / float32(width)
 		x = (x - 0.5) * 4
 		y := -2 + 4*float32(pos - start) / float32(N)
 		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
@@ -116,24 +151,11 @@ func main_loop(target_fps int, data ProgramData, ) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	var minAddr, maxAddr uint64 = math.MaxUint64, 0
-
-	for i := range data.access { //}:= 0; i < 100; i++ {
-		//log.Print(records[i])
-		r := &data.access[i]
-		if r.Addr < 0x7fff00000000 {
-			continue
-		}
-		if r.Addr < minAddr {
-			minAddr = r.Addr
-		}
-		if r.Addr > maxAddr {
-			maxAddr = r.Addr
-		}
+	log.Print("Active Region IDs:")
+	active_regions := data.ActiveRegionIDs()
+	for i := range active_regions {
+		log.Print(active_regions[i])
 	}
-
-	log.Printf("Min = 0x%x - 0x%x", minAddr, maxAddr)
-	widthAddr := maxAddr - minAddr
 
 	var i int64 = 0
 
@@ -149,7 +171,7 @@ func main_loop(target_fps int, data ProgramData, ) {
 
 		gl.Begin(gl.LINES)
 		N := *nback
-		_ = data.Draw(i, N, minAddr, widthAddr)
+		_ = data.Draw(i, N, active_regions[0])
 		gl.End()
 
 		glfw.SwapBuffers()
