@@ -33,10 +33,20 @@ var nback = flag.Int64("nback", 8000, "number of records to show")
 
 var verbose = flag.Bool("verbose", false, "Verbose")
 
+type MemRegion struct {
+	low, hi uint64
+	what string
+}
+
 type MemAccess struct {
 	Time             float64
 	Pc, Bp, Sp, Addr uint64
 	IsWrite          uint64 // because alignment.
+}
+
+type ProgramData struct {
+	region []MemRegion
+	access []MemAccess
 }
 
 func (a MemAccess) String() string {
@@ -48,7 +58,7 @@ func draw() {
 
 }
 
-func main_loop(target_fps int, records []MemAccess) {
+func main_loop(target_fps int, data ProgramData, ) {
 
 	target_frame_period := time.Second / time.Duration(target_fps)
 	
@@ -80,9 +90,9 @@ func main_loop(target_fps int, records []MemAccess) {
 
 	var minAddr, maxAddr uint64 = math.MaxUint64, 0
 
-	for i := range records { //}:= 0; i < 100; i++ {
+	for i := range data.access { //}:= 0; i < 100; i++ {
 		//log.Print(records[i])
-		r := &records[i]
+		r := &data.access[i]
 		if r.Addr < 0x7fff00000000 {
 			continue
 		}
@@ -112,8 +122,8 @@ func main_loop(target_fps int, records []MemAccess) {
 		gl.Begin(gl.LINES)
 		N := *nback
 		for j := int64(0); j < N; j++ {
-			pos := (i + j) % int64(len(records))
-			r := records[pos]
+			pos := (i + j) % int64(len(data.access))
+			r := data.access[pos]
 
 			x := float32(r.Addr - minAddr) / float32(widthAddr)
 			x = (x - 0.5) * 4
@@ -166,7 +176,7 @@ func main_loop(target_fps int, records []MemAccess) {
 	}
 }
 
-func parse_file(filename string) []MemAccess {
+func parse_file(filename string) ProgramData {
 	fd, err := os.Open(filename)
 	defer fd.Close()
 	if err != nil {
@@ -179,6 +189,8 @@ func parse_file(filename string) []MemAccess {
 		log.Panic("Error reading file: ", err)
 	}
 
+	var data ProgramData
+
 	page_table := string(page_table_bytes[:len(page_table_bytes)-1])
 	page_table_lines := strings.Split(page_table, "\n")
 
@@ -187,17 +199,17 @@ func parse_file(filename string) []MemAccess {
 		if len(line) == 0 {
 			continue
 		}
-		var low, hi uint64
-		var what string
+		x := MemRegion{}
 
-		_, err := fmt.Sscanf(line, " 0x%x-0x%x %s", &low, &hi, &what)
+		_, err := fmt.Sscanf(line, " 0x%x-0x%x %s", &x.low, &x.hi, &x.what)
 		if err != nil {
-			_, err := fmt.Sscanf(line, " 0x%x-0x%x", &low, &hi)
-			what = "<unk>"
+			_, err := fmt.Sscanf(line, " 0x%x-0x%x", &x.low, &x.hi)
+			x.what = "<unk>"
 			if err != nil {
 				log.Panic("Error parsing: ", err, " '", line, "'")
 			}
 		}
+		data.region = append(data.region, x)
 	}
 
 	if *jump != 0 {
@@ -205,23 +217,21 @@ func parse_file(filename string) []MemAccess {
 		reader = bufio.NewReader(fd)
 	}
 
-	var records []MemAccess
-
 	for {
 		x := MemAccess{}
 		err = binary.Read(reader, binary.LittleEndian, &x)
 		if err != nil {
 			break
 		}
-		records = append(records, x)
-		if *nrec != 0 && int64(len(records)) > *nrec {
+		data.access = append(data.access, x)
+		if *nrec != 0 && int64(len(data.access)) > *nrec {
 			break
 		}
 	}
 
-	log.Print("Read ", len(records))
+	log.Print("Read ", len(data.access))
 
-	return records
+	return data
 }
 
 func main() {
@@ -237,12 +247,12 @@ func main() {
 		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
 	}
 
-	records := parse_file(flag.Arg(0))
+	data := parse_file(flag.Arg(0))
 
 	cleanup := make_window(400, 400, "Memory Accesses")
 	defer cleanup()
 
 	target_fps := 60
 
-	main_loop(target_fps, records)
+	main_loop(target_fps, data)
 }
