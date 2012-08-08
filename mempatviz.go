@@ -140,7 +140,6 @@ func main_loop(target_fps int, data ProgramData, ) {
 				gl.End()
 				gl.LineWidth(0.5)
 				gl.Begin(gl.LINES)
-				*nfram = 100
 			}
 
 			if r.Addr < 0x7fff00000000 {
