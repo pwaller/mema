@@ -33,6 +33,8 @@ var nfram = flag.Int64("nfram", 100, "number of records to jump per frame")
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
 var verbose = flag.Bool("verbose", false, "Verbose")
+var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
+
 
 type MemRegion struct {
 	low, hi uint64
@@ -97,12 +99,14 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 
 	width := maxAddr - minAddr
 
-	for p := uint64(0); p < width; p += 4096 {
-		x := float32(p) / float32(width)
-		x = (x - 0.5) * 4
-		gl.Color4d(0, 0, 1, 1)
-		gl.Vertex3f(x, -2, -10)
-		gl.Vertex3f(x, 2, -10)
+	if *pageboundaries {
+		for p := uint64(0); p < width; p += 4096 {
+			x := float32(p) / float32(width)
+			x = (x - 0.5) * 4
+			gl.Color4d(0, 0, 1, 1)
+			gl.Vertex3f(x, -2, -10)
+			gl.Vertex3f(x, 2, -10)
+		}
 	}
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
