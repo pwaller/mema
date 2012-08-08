@@ -54,6 +54,34 @@ func (a MemAccess) String() string {
 		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
 }
 
+func (d ProgramData) RegionID(addr uint64) int {
+	for i := range d.region {
+		if d.region[i].low < addr && addr < d.region[i].hi { return i }
+	}
+	log.Panic("Address ", addr, " not in any defined memory region!");
+	panic("")
+}
+
+func min(a, b int64) int64 {
+if b < a {
+return b
+}
+return a
+}
+
+func (data ProgramData) Draw(start, N int64, minAddr, widthAddr uint64) bool {
+	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
+		r := data.access[pos]
+		x := float32(r.Addr - minAddr) / float32(widthAddr)
+		x = (x - 0.5) * 4
+		y := -2 + 4*float32(pos - start) / float32(N)
+		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
+		gl.Vertex3f(x, y, -10)
+		gl.Vertex3f(x, y+0.05, -10)
+	}
+	return start + N > int64(len(data.access))
+}
+
 func draw() {
 
 }
@@ -121,35 +149,7 @@ func main_loop(target_fps int, data ProgramData, ) {
 
 		gl.Begin(gl.LINES)
 		N := *nback
-		for j := int64(0); j < N; j++ {
-			pos := (i + j) % int64(len(data.access))
-			r := data.access[pos]
-
-			x := float32(r.Addr - minAddr) / float32(widthAddr)
-			x = (x - 0.5) * 4
-			y := -2 + 4*float32(j) / float32(N)
-
-			if pos == 0 {
-				//log.Print("Pos = 0 y =", y)
-				gl.End()
-				gl.LineWidth(10)
-				gl.Begin(gl.LINES)
-				gl.Color4f(1, 1, 1, 1)
-				gl.Vertex3f(-10, y, -10)
-				gl.Vertex3f(10, y, -10)
-				gl.End()
-				gl.LineWidth(0.5)
-				gl.Begin(gl.LINES)
-			}
-
-			if r.Addr < 0x7fff00000000 {
-				continue
-			}
-			gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1+math.Log(1.-float64(N-j)/float64(N))/3)
-			gl.Vertex3f(x, y, -10)
-			gl.Vertex3f(x, y+0.05, -10)
-		}
-
+		_ = data.Draw(i, N, minAddr, widthAddr)
 		gl.End()
 
 		glfw.SwapBuffers()
