@@ -19,6 +19,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"time"
 )
@@ -71,6 +72,7 @@ func (d ProgramData) ActiveRegionIDs() []int {
 	for k, _ := range active {
 		result = append(result, k)
 	}
+	sort.Ints(result)
 	return result
 }
 
