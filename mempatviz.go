@@ -31,6 +31,8 @@ var nrec = flag.Int64("nrec", 0, "number of records to read")
 var nfram = flag.Int64("nfram", 100, "number of records to jump per frame")
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
+var verbose = flag.Bool("verbose", false, "Verbose")
+
 type MemAccess struct {
 	Time             float64
 	Pc, Bp, Sp, Addr uint64
@@ -49,7 +51,10 @@ func draw() {
 func main_loop(target_fps int, records []MemAccess) {
 
 	target_frame_period := time.Second / time.Duration(target_fps)
-	log.Print("target_frame_period = ", target_frame_period)
+	
+	if (*verbose) {
+		log.Print("target_frame_period = ", target_frame_period)
+	}
 
 	last_frame_epoch := time.Now()
 	elapsed := time.Duration(0)
@@ -62,7 +67,9 @@ func main_loop(target_fps int, records []MemAccess) {
 		//return
 		for {
 			time.Sleep(time.Second)
-			log.Print("fps = ", float64(frames)/time.Since(start).Seconds())
+			if (*verbose) {
+				log.Print("fps = ", float64(frames)/time.Since(start).Seconds())
+			}
 			start = time.Now()
 			frames = 0
 		}
@@ -219,8 +226,10 @@ func parse_file(filename string) []MemAccess {
 
 func main() {
 
-	log.Print("Startup")
-	defer log.Print("Shutdown")
+	if (*verbose) {
+		log.Print("Startup")
+		defer log.Print("Shutdown")
+	}
 
 	flag.Parse()
 
