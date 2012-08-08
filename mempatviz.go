@@ -13,8 +13,6 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
-	"github.com/banthar/gl"
-	"github.com/jteeuwen/glfw"
 	"log"
 	"math"
 	"os"
@@ -22,6 +20,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+	
+	"github.com/banthar/gl"
+	"github.com/jteeuwen/glfw"
+	"code.google.com/p/snappy-go/snappy"
 )
 
 var printInfo = flag.Bool("info", false, "print GL implementation information")
@@ -38,7 +40,7 @@ var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
 type MemRegion struct {
 	low, hi uint64
-	what string
+	perms, offset, dev, inode, pathname string
 }
 
 type MemAccess struct {
@@ -61,8 +63,8 @@ func (d ProgramData) RegionID(addr uint64) int {
 	for i := range d.region {
 		if d.region[i].low < addr && addr < d.region[i].hi { return i }
 	}
-	log.Panic("Address ", addr, " not in any defined memory region!");
-	panic("")
+	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
+	return len(d.region)
 }
 
 func (d ProgramData) ActiveRegionIDs() []int {
@@ -177,7 +179,7 @@ func main_loop(target_fps int, data ProgramData, ) {
 
 		gl.Begin(gl.LINES)
 		N := *nback
-		_ = data.Draw(i, N, active_regions[0])
+		_ = data.Draw(i, N, active_regions[5])
 		gl.End()
 
 		glfw.SwapBuffers()
@@ -210,7 +212,15 @@ func parse_file(filename string) ProgramData {
 		log.Panic("Fatal error: ", err)
 	}
 
-	reader := bufio.NewReader(fd)
+	magic_buf := make([]byte, 8)
+
+	_, err = fd.Read(magic_buf)
+	if err != nil || string(magic_buf) != "MEMACCES" {
+		log.Panic("Error reading magic bytes: ", err, " bytes=", magic_buf)
+	}
+
+	reader := bufio.NewReaderSize(fd, 1024*1024)
+		
 	page_table_bytes, err := reader.ReadBytes('\x00')
 	if err != nil {
 		log.Panic("Error reading file: ", err)
@@ -228,10 +238,12 @@ func parse_file(filename string) ProgramData {
 		}
 		x := MemRegion{}
 
-		_, err := fmt.Sscanf(line, " 0x%x-0x%x %s", &x.low, &x.hi, &x.what)
+		_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s %s", &x.low, &x.hi, 
+							 &x.perms, &x.offset, &x.dev, &x.inode, &x.pathname)
 		if err != nil {
-			_, err := fmt.Sscanf(line, " 0x%x-0x%x", &x.low, &x.hi)
-			x.what = "<unk>"
+			_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s", &x.low, &x.hi, 
+								 &x.perms, &x.offset, &x.dev, &x.inode)
+			x.pathname = ""
 			if err != nil {
 				log.Panic("Error parsing: ", err, " '", line, "'")
 			}
@@ -243,10 +255,33 @@ func parse_file(filename string) ProgramData {
 		fd.Seek(*jump, os.SEEK_SET)
 		reader = bufio.NewReader(fd)
 	}
+	
+	//reader = bufio.NewReader(fd)
 
 	for {
+		
+		var block_size int64
+		err = binary.Read(reader, binary.LittleEndian, &block_size)
+		
+		
+		compressed := make([]byte, block_size)
+		n, err := reader.Read(compressed)
+		
+		if err != nil { log.Panic("Error whilst reading record: ", err) }
+		if int64(n) != block_size {			
+			log.Panic("Error whilst reading record, ", n, " != ", block_size, " ", len(compressed))
+		}
+		
+		decoded_len, err := snappy.DecodedLen(compressed)
+		if err != nil { log.Panic(err) }
+				
+		decompressed := make([]byte, decoded_len)
+		decompressed, err = snappy.Decode(decompressed, compressed)
+		log.Panic("")
+		
 		x := MemAccess{}
 		err = binary.Read(reader, binary.LittleEndian, &x)
+		
 		if err != nil {
 			break
 		}
