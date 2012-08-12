@@ -1,0 +1,11 @@
+
+BUILD_DIR=/home/pwaller/Projects/mema/memapass/build
+path_add LD_LIBRARY_PATH ${BUILD_DIR}/LLVMMema
+
+export CFLAGS="-Xclang -load -Xclang LLVMMema.so"
+export CXXFLAGS="${CFLAGS}"
+export LDFLAGS="-Wl,-rpath,${BUILD_DIR} -L${BUILD_DIR} -lmemartl"
+export LINKFLAGS="${LINKFLAGS}"
+
+export CC=clang
+export CXX=clang++

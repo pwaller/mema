@@ -1,0 +1,9 @@
+MemaPass
+--------
+
+An LLVM pass to instrument memory accesses
+
+Limitations
+-----------
+
+Mema can only instrument reads and writes of modules which have been compiled.
