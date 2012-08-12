@@ -10,7 +10,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -40,6 +39,7 @@ var nback = flag.Int64("nback", 8000, "number of records to show")
 var verbose = flag.Bool("verbose", false, "Verbose")
 var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
+const MAGIC_IN_RECORD = false
 
 type MemRegion struct {
 	low, hi uint64
@@ -234,9 +234,14 @@ func parse_block(decompressed_reader Reader, data *ProgramData) {
 	//junk := make([]byte, 128 - 48)
 	for {
 		i++
-		//if i > 20 { log.Panic("Finishing.") }
 		err := binary.Read(decompressed_reader, binary.LittleEndian, &v)
-		//log.Print("Got v == ", v, err)
+		if MAGIC_IN_RECORD {
+			var magic uint64
+			err = binary.Read(decompressed_reader, binary.LittleEndian, &magic)
+			if magic != 0xDEADBEEF {
+				log.Printf("  magic bytes: %x", magic)
+			}
+		}
 		if v == MEMA_ACCESS {
 			err = binary.Read(decompressed_reader, binary.LittleEndian, &x)
 			//decompressed_reader.Read(junk)
@@ -246,17 +251,25 @@ func parse_block(decompressed_reader Reader, data *ProgramData) {
 			// TODO: Encode this somehow. Also deref the symbol from the symbol
 			//       table
 
-			decompressed_reader.Read(buf)
+			n, err := io.ReadFull(decompressed_reader, buf)
+			if err != nil || n != len(buf) {
+				log.Panic("n = ", n, " err = ", err, )
+			}
 			func_addr := binary.LittleEndian.Uint64(buf)
 			_ = func_addr
 			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
 			//log.Printf("Function Enter: 0x%x", func_addr)
 		} else if v == MEMA_FUNC_EXIT {
-			decompressed_reader.Read(buf)
+			n, err := io.ReadFull(decompressed_reader, buf)
+			if err != nil || n != len(buf) {
+				log.Panic("n = ", n, " err = ", err)
+			}
 			func_addr := binary.LittleEndian.Uint64(buf)
 			_ = func_addr
 			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
 			//log.Printf("Function Exit: 0x%x", func_addr)
+		} else {
+			log.Panic("Unknown event e = ", v, " err:", err)
 		}
 		if err == io.EOF {
 			break
@@ -283,7 +296,7 @@ func parse_file(filename string) ProgramData {
 		log.Panic("Error reading magic bytes: ", err, " bytes=", magic_buf)
 	}
 
-	reader := bufio.NewReaderSize(fd, 1024*1024)
+	reader := bufio.NewReaderSize(fd, 10*1024*1024)
 		
 	page_table_bytes, err := reader.ReadBytes('\x00')
 	if err != nil {
@@ -343,37 +356,31 @@ func parse_file(filename string) ProgramData {
 		}
 
 		// BUG! TODO
-		if block_size > 1024*1024 {
+		if block_size > 10*1024*1024 {
 			log.Print("There is something I don't understand about the format..")
 			break
 		}
 
-		round_1 := lz4.NewReader(io.LimitReader(reader, block_size))
+		r := io.LimitReader(reader, block_size)
+		round_1 := lz4.NewReader(r)
 		round_2 := lz4.NewReader(round_1)
 		decompressed_reader := round_2
-
-		/*
-			compressed := make([]byte, block_size)
-			n, err := io.ReadFull(reader, compressed)
-
-			if err != nil { log.Panic("Error whilst reading record: ", err) }
-			if int64(n) != block_size {			
-				log.Panic("Error whilst reading record, ", n, " != ", block_size, " ", len(compressed))
+		
+		//decompressed_reader := r
+		
+		defer func() {
+			if e := recover(); e != nil {
+				offset, _ := fd.Seek(0, os.SEEK_CUR)
+				buf, err := reader.Peek(8)
+				log.Printf("Bytes: %q err: %q", buf, err)
+				log.Print("!Reading from location ", offset, " - ", 	
+						  offset-int64(reader.Buffered()), " buf = ", 
+						  reader.Buffered(), " offs = ", offset)
+				log.Panic("Panicked = ", e, " bytes remain: ", r.(*io.LimitedReader).N)
 			}
-			log.Print("read block ", n, " - ", block_size)
-
-			decoded_len, err := snappy.DecodedLen(compressed)
-			if err != nil { log.Panic(err) }
-
-			decompressed := make([]byte, decoded_len)
-			decompressed, err = snappy.Decode(decompressed, compressed)
-
-			decompressed_buf := bytes.NewBuffer(decompressed)
-			decompressed_reader := bufio.NewReaderSize(decompressed_buf, 1024*1024)
-		*/
+		}()
 
 		parse_block(decompressed_reader, &data)
-		//log.Panic("Finishing.")
 
 		if *nrec != 0 && int64(len(data.access)) > *nrec {
 			break
