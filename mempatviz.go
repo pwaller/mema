@@ -25,7 +25,8 @@ import (
 	
 	"github.com/banthar/gl"
 	"github.com/jteeuwen/glfw"
-	"code.google.com/p/snappy-go/snappy"
+	// "code.google.com/p/snappy-go/snappy"
+	"github.com/mnuhn/go-lz4"
 )
 
 var printInfo = flag.Bool("info", false, "print GL implementation information")
@@ -223,35 +224,49 @@ type Reader interface {
 func parse_block(decompressed_reader Reader, data *ProgramData) {
 	x := MemAccess{}
 	var v int64
-	
+
+	//r := bufio.NewReader(decompressed_reader)
+	//buf, err := r.Peek(8)
+	//log.Printf("Bytes: %q err: %q", buf, err)
+
 	i := 0
-	junk := make([]byte, 128 - 48)
+	buf := make([]byte, 48)
+	//junk := make([]byte, 128 - 48)
 	for {
 		i++
 		//if i > 20 { log.Panic("Finishing.") }
 		err := binary.Read(decompressed_reader, binary.LittleEndian, &v)
-		//log.Print("Got v == ", v)
+		//log.Print("Got v == ", v, err)
 		if v == MEMA_ACCESS {
 			err = binary.Read(decompressed_reader, binary.LittleEndian, &x)
-			decompressed_reader.Read(junk)
-			//log.Print("Value of v:", v, " x: ", x)
+			//decompressed_reader.Read(junk)
+			//log.Print("Value of v:", v, " x: ", x, " err:", err)
 		} else if v == MEMA_FUNC_ENTER {
 			// TODO: Use index into string map instead
-			b := make([]byte, 128)
-			decompressed_reader.Read(b)
-			//log.Printf("Function Enter: %q", b)
+			// TODO: Encode this somehow. Also deref the symbol from the symbol
+			//       table
+
+			decompressed_reader.Read(buf)
+			func_addr := binary.LittleEndian.Uint64(buf)
+			_ = func_addr
+			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
+			//log.Printf("Function Enter: 0x%x", func_addr)
 		} else if v == MEMA_FUNC_EXIT {
-			b := make([]byte, 128)
-			decompressed_reader.Read(b)
-			//log.Printf("Function Exit: %q", b)			
+			decompressed_reader.Read(buf)
+			func_addr := binary.LittleEndian.Uint64(buf)
+			_ = func_addr
+			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
+			//log.Printf("Function Exit: 0x%x", func_addr)
 		}
-		if err == io.EOF { break }
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
 			log.Panic("Unexpected error: ", err)
 		}
 		data.access = append(data.access, x)
 	}
-	
+
 }
 
 func parse_file(filename string) ProgramData {
@@ -306,50 +321,60 @@ func parse_file(filename string) ProgramData {
 		fd.Seek(*jump, os.SEEK_SET)
 		reader = bufio.NewReader(fd)
 	}
-	
+
 	//reader = bufio.NewReader(fd)
 
 	for {
-	
+
 		offset, err := fd.Seek(0, os.SEEK_CUR)
-		log.Print("Reading from location ", offset - int64(reader.Buffered()), " buf = ", reader.Buffered(), " offs = ", offset)
+		log.Print("Reading from location ", offset-int64(reader.Buffered()), " buf = ", reader.Buffered(), " offs = ", offset)
 		buf, err := reader.Peek(8)
 		log.Printf("Bytes: %q", buf)
-		
+
 		var block_size int64
 		err = binary.Read(reader, binary.LittleEndian, &block_size)
 		log.Print("Reading block with size: ", block_size)
-		
-		if err == io.EOF { break }
-		if err != nil { log.Panic("Error: ", err) }
-		
+
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Panic("Error: ", err)
+		}
+
 		// BUG! TODO
 		if block_size > 1024*1024 {
 			log.Print("There is something I don't understand about the format..")
 			break
 		}
-		
-		compressed := make([]byte, block_size)
-		n, err := io.ReadFull(reader, compressed)
-		
-		if err != nil { log.Panic("Error whilst reading record: ", err) }
-		if int64(n) != block_size {			
-			log.Panic("Error whilst reading record, ", n, " != ", block_size, " ", len(compressed))
-		}
-		//log.Print("read block ", n, " - ", block_size)
-		
-		decoded_len, err := snappy.DecodedLen(compressed)
-		if err != nil { log.Panic(err) }
-				
-		decompressed := make([]byte, decoded_len)
-		decompressed, err = snappy.Decode(decompressed, compressed)
-		
-		decompressed_buf := bytes.NewBuffer(decompressed)
-		decompressed_reader := bufio.NewReaderSize(decompressed_buf, 1024*1024)
-		
+
+		round_1 := lz4.NewReader(io.LimitReader(reader, block_size))
+		round_2 := lz4.NewReader(round_1)
+		decompressed_reader := round_2
+
+		/*
+			compressed := make([]byte, block_size)
+			n, err := io.ReadFull(reader, compressed)
+
+			if err != nil { log.Panic("Error whilst reading record: ", err) }
+			if int64(n) != block_size {			
+				log.Panic("Error whilst reading record, ", n, " != ", block_size, " ", len(compressed))
+			}
+			log.Print("read block ", n, " - ", block_size)
+
+			decoded_len, err := snappy.DecodedLen(compressed)
+			if err != nil { log.Panic(err) }
+
+			decompressed := make([]byte, decoded_len)
+			decompressed, err = snappy.Decode(decompressed, compressed)
+
+			decompressed_buf := bytes.NewBuffer(decompressed)
+			decompressed_reader := bufio.NewReaderSize(decompressed_buf, 1024*1024)
+		*/
+
 		parse_block(decompressed_reader, &data)
 		//log.Panic("Finishing.")
-		
+
 		if *nrec != 0 && int64(len(data.access)) > *nrec {
 			break
 		}
