@@ -41,6 +41,8 @@ var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
 const MAGIC_IN_RECORD = false
 
+var margin_factor = float32(0.95)
+
 type MemRegion struct {
 	low, hi uint64
 	perms, offset, dev, inode, pathname string
@@ -92,6 +94,7 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	var minAddr, maxAddr uint64 = math.MaxUint64, 0
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
+		if pos < 0 { continue }
 		r := data.access[pos]
 		if data.RegionID(r.Addr) != region_id { continue }
 		if r.Addr < minAddr {
@@ -103,32 +106,44 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	}
 
 	width := maxAddr - minAddr
+	if width == 0 { width = 1 }
 
 	if *pageboundaries {
 		for p := uint64(0); p < width; p += 4096 {
 			x := float32(p) / float32(width)
 			x = (x - 0.5) * 4
 			gl.Color4d(0, 0, 1, 1)
+			x *= margin_factor
 			gl.Vertex3f(x, -2, -10)
 			gl.Vertex3f(x, 2, -10)
 		}
 	}
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
+		if pos < 0 { continue }
 		r := data.access[pos]
 		i := data.RegionID(r.Addr)
 		if i != region_id { continue }
 		x := float32(r.Addr - minAddr) / float32(width)
 		x = (x - 0.5) * 4
+		x *= margin_factor
 		y := -2 + 4*float32(pos - start) / float32(N)
 		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
 		gl.Vertex3f(x, y, -10)
 		gl.Vertex3f(x, y+0.0125, -10)
-		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 0.1)
+		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1)
 		gl.Vertex3f(x, 2 + 0.1, -10)
 		gl.Vertex3f(x, 2, -10)
+
 	}
-	return start + N > int64(len(data.access))
+	if start + N > int64(len(data.access)) {
+		y := -2 + 4*float32(int64(len(data.access)) - start) / float32(N)
+		gl.Color4d(1, 1, 1, 1)
+		gl.Vertex3f(-2, y, -10)
+		gl.Vertex3f( 2, y, -10)
+	}
+	return start > int64(len(data.access))
+
 }
 
 func draw() {
@@ -171,9 +186,9 @@ func main_loop(target_fps int, data ProgramData, ) {
 		log.Print(active_regions[i])
 	}
 
-	var i int64 = 0
-
 	done := false
+	active_region := 0
+	var i int64 = -int64(*nback) //len(data.access))
 	for !done {
 		draw()
 
@@ -185,7 +200,12 @@ func main_loop(target_fps int, data ProgramData, ) {
 
 		gl.Begin(gl.LINES)
 		N := *nback
-		_ = data.Draw(i, N, active_regions[5])
+		wrapped := data.Draw(i, N, active_regions[active_region])
+		if wrapped {
+			i = -int64(*nback)
+			active_region = (active_region + 1) % len(active_regions)
+			log.Print("Active Region: ", active_regions[active_region])
+		}
 		gl.End()
 
 		glfw.SwapBuffers()
