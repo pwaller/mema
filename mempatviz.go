@@ -39,7 +39,7 @@ var nback = flag.Int64("nback", 8000, "number of records to show")
 var verbose = flag.Bool("verbose", false, "Verbose")
 var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
-const MAGIC_IN_RECORD = false
+var MAGIC_IN_RECORD = flag.Bool("magic-in-record", false, "Records contain magic bytes")
 
 var margin_factor = float32(0.95)
 
