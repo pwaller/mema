@@ -109,13 +109,15 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	if width == 0 { width = 1 }
 
 	if *pageboundaries {
-		for p := uint64(0); p < width; p += 4096 {
-			x := float32(p) / float32(width)
-			x = (x - 0.5) * 4
-			gl.Color4d(0, 0, 1, 1)
-			x *= margin_factor
-			gl.Vertex3f(x, -2, -10)
-			gl.Vertex3f(x, 2, -10)
+		if width / 4096 < 100 { // If we try and draw too many of these, X will hang
+			for p := uint64(0); p < width; p += 4096 {
+				x := float32(p) / float32(width)
+				x = (x - 0.5) * 4
+				gl.Color4d(1, 1, 1, 0.25)
+				x *= margin_factor
+				gl.Vertex3f(x, -2, -10)
+				gl.Vertex3f(x, 2, -10)
+			}
 		}
 	}
 
