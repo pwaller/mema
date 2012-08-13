@@ -282,7 +282,7 @@ func main_loop(target_fps int, data ProgramData, ) {
 		if wrapped {
 			i = -int64(*nback)
 			active_region = (active_region + 1) % len(active_regions)
-			log.Print("Active Region: ", active_regions[active_region])
+			log.Print("Active Region: ", data.region[active_region])
 		}
 		gl.End()
 
