@@ -63,6 +63,9 @@ type MemAccess struct {
 type ProgramData struct {
 	region []MemRegion
 	access []MemAccess
+	quiet_pages map[uint64] bool
+	active_pages map[uint64] bool
+	n_pages_to_left map[uint64] uint64
 }
 
 func (a MemAccess) String() string {
@@ -78,16 +81,69 @@ func (d ProgramData) RegionID(addr uint64) int {
 	return len(d.region)
 }
 
-func (d ProgramData) ActiveRegionIDs() []int {
+type UInt64Slice []uint64
+func (p UInt64Slice) Len() int           { return len(p) }
+func (p UInt64Slice) Less(i, j int) bool { return p[i] < p[j] }
+func (p UInt64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+// Sort is a convenience method.
+func (p UInt64Slice) Sort() { sort.Sort(p) }
+
+func (d *ProgramData) ActiveRegionIDs() []int {
 	active := make(map[int] bool)
+	page_activity := make(map[uint64] int)
+	
 	for i := range d.access {
-		active[d.RegionID(d.access[i].Addr)] = true
+		a := &d.access[i]
+		active[d.RegionID(a.Addr)] = true
+		page := a.Addr / *PAGE_SIZE
+		
+		page_activity[page]++
 	}
 	result := make([]int, 0)
 	for k, _ := range active {
 		result = append(result, k)
 	}
 	sort.Ints(result)
+	
+	// Figure out how much activity the busiest page has
+	highest_page_activity := 0
+	for _, value := range page_activity {
+		if value > highest_page_activity {
+			highest_page_activity = value
+		}
+	}
+
+	d.quiet_pages = make(map[uint64] bool)
+	d.active_pages = make(map[uint64] bool)
+	d.n_pages_to_left = make(map[uint64] uint64)
+	
+	// Populate the "quiet pages" map (less than 1% of the activity of the 
+	// most active page)
+	for page, value := range page_activity {
+		if value < highest_page_activity / 100 {
+			d.quiet_pages[page] = true
+			continue
+		}
+		d.active_pages[page] = true
+	}
+	
+	log.Print("Quiet pages: ", len(d.quiet_pages), " active: ", len(d.active_pages))
+	
+	// Build list of pages which are active
+	pages := make([]uint64, len(d.active_pages))
+	i := 0
+	for page, _ := range d.active_pages {
+		pages[i] = page
+		i++
+	}
+	sort.Sort(UInt64Slice(pages))
+	for i := range pages {
+		page := pages[i]
+		log.Print("Page ", i, " : ", ])
+		d.n_pages_to_left[page] = i
+	}
+	
 	return result
 }
 
@@ -102,6 +158,10 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]
+		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
+			//log.Print("Ignoring addr: ", r.Addr)
+			continue
+		}
 		if data.RegionID(r.Addr) != region_id { continue }
 		if r.Addr < minAddr {
 			minAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE)
@@ -126,12 +186,19 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 			}
 		}
 	}
+	
+	//log.Print("Enter loop")
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]
 		i := data.RegionID(r.Addr)
 		if i != region_id { continue }
+		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
+			//log.Print("Ignoring addr: ", r.Addr)
+			continue
+		}
+		//log.Print("  Drawing line..")
 		x := float32(r.Addr - minAddr) / float32(width)
 		x = (x - 0.5) * 4
 		x *= margin_factor
