@@ -39,7 +39,13 @@ var nback = flag.Int64("nback", 8000, "number of records to show")
 var verbose = flag.Bool("verbose", false, "Verbose")
 var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
+// TODO: Move these onto the file
+var compressed = flag.Bool("compressed", true, "input file uses compression")
 var MAGIC_IN_RECORD = flag.Bool("magic-in-record", false, "Records contain magic bytes")
+var PAGE_SIZE = flag.Uint64("page-size", 4096, "page-size")
+
+var region = flag.Int("region", 0, "Region index to view")
+
 
 var margin_factor = float32(0.95)
 
@@ -95,13 +101,13 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
-		r := data.access[pos]
+		r := &data.access[pos]
 		if data.RegionID(r.Addr) != region_id { continue }
 		if r.Addr < minAddr {
-			minAddr = 4096 * (r.Addr / 4096)
+			minAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE)
 		}
 		if r.Addr > maxAddr {
-			maxAddr = 4096 * (r.Addr / 4096 + 1)
+			maxAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE + 1)
 		}
 	}
 
@@ -109,8 +115,8 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	if width == 0 { width = 1 }
 
 	if *pageboundaries {
-		if width / 4096 < 100 { // If we try and draw too many of these, X will hang
-			for p := uint64(0); p < width; p += 4096 {
+		if width / *PAGE_SIZE < 100 { // If we try and draw too many of these, X will hang
+			for p := uint64(0); p < width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
 				gl.Color4d(1, 1, 1, 0.25)
@@ -123,7 +129,7 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
-		r := data.access[pos]
+		r := &data.access[pos]
 		i := data.RegionID(r.Addr)
 		if i != region_id { continue }
 		x := float32(r.Addr - minAddr) / float32(width)
@@ -189,8 +195,9 @@ func main_loop(target_fps int, data ProgramData, ) {
 	}
 
 	done := false
-	active_region := 0
+	active_region := *region
 	var i int64 = -int64(*nback) //len(data.access))
+	log.Print("Active Region: ", data.region[active_region])
 	for !done {
 		draw()
 
@@ -257,15 +264,23 @@ func parse_block(decompressed_reader Reader, data *ProgramData) {
 	for {
 		i++
 		err := binary.Read(decompressed_reader, binary.LittleEndian, &v)
-		if MAGIC_IN_RECORD {
+		if err == io.EOF { break }
+		
+		if *MAGIC_IN_RECORD {
 			var magic uint64
 			err = binary.Read(decompressed_reader, binary.LittleEndian, &magic)
+			if err != nil {
+				log.Panic("Error reading MAGIC")
+			}
 			if magic != 0xDEADBEEF {
 				log.Printf("  magic bytes: %x", magic)
 			}
 		}
 		if v == MEMA_ACCESS {
 			err = binary.Read(decompressed_reader, binary.LittleEndian, &x)
+			if err != nil {
+				log.Panic("Error reading MEMA_ACCESS")
+			}
 			//decompressed_reader.Read(junk)
 			//log.Print("Value of v:", v, " x: ", x, " err:", err)
 		} else if v == MEMA_FUNC_ENTER {
@@ -361,10 +376,10 @@ func parse_file(filename string) ProgramData {
 
 	for {
 
-		offset, err := fd.Seek(0, os.SEEK_CUR)
-		log.Print("Reading from location ", offset-int64(reader.Buffered()), " buf = ", reader.Buffered(), " offs = ", offset)
-		buf, err := reader.Peek(8)
-		log.Printf("Bytes: %q", buf)
+		//offset, err := fd.Seek(0, os.SEEK_CUR)
+		//log.Print("Reading from location ", offset-int64(reader.Buffered()), " buf = ", reader.Buffered(), " offs = ", offset)
+		//buf, err := reader.Peek(8)
+		//log.Printf("Bytes: %q", buf)
 
 		var block_size int64
 		err = binary.Read(reader, binary.LittleEndian, &block_size)
@@ -379,14 +394,20 @@ func parse_file(filename string) ProgramData {
 
 		// BUG! TODO
 		if block_size > 10*1024*1024 {
+			log.Panic("Unexpectedly huge block, possible format issue: ", block_size)
 			log.Print("There is something I don't understand about the format..")
 			break
 		}
 
 		r := io.LimitReader(reader, block_size)
-		round_1 := lz4.NewReader(r)
-		round_2 := lz4.NewReader(round_1)
-		decompressed_reader := round_2
+		
+		var decompressed_reader io.Reader = r
+		
+		if *compressed {
+			round_1 := lz4.NewReader(r)
+			round_2 := lz4.NewReader(round_1)
+			decompressed_reader = round_2
+		}
 		
 		//decompressed_reader := r
 		
