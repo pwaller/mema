@@ -136,10 +136,12 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 		x = (x - 0.5) * 4
 		x *= margin_factor
 		y := -2 + 4*float32(pos - start) / float32(N)
-		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
+		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
+		//log.Print("iswrite: ", r.IsWrite, " ", float64(1-r.IsWrite), float64(r.IsWrite))
 		gl.Vertex3f(x, y, -10)
+		//gl.Vertex3f(x+(float32(r.IsWrite)-0.5)*0.05, y+0.0125, -10)
 		gl.Vertex3f(x, y+0.0125, -10)
-		gl.Color4d(float64(1-r.IsWrite), float64(r.IsWrite), 0, 1)
+		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1)
 		gl.Vertex3f(x, 2 + 0.1, -10)
 		gl.Vertex3f(x, 2, -10)
 
