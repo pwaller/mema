@@ -10,22 +10,26 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"log"
 	"math"
 	"os"
 	"os/signal"
+	"reflect"
+	"runtime/pprof"
 	"sort"
 	"strings"
 	"time"
+	"unsafe"
 	
 	"github.com/banthar/gl"
 	"github.com/jteeuwen/glfw"
-	// "code.google.com/p/snappy-go/snappy"
-	"github.com/mnuhn/go-lz4"
 )
 
 var printInfo = flag.Bool("info", false, "print GL implementation information")
@@ -46,19 +50,44 @@ var PAGE_SIZE = flag.Uint64("page-size", 4096, "page-size")
 
 var region = flag.Int("region", 0, "Region index to view")
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 var margin_factor = float32(0.95)
+
+const (
+	MEMA_ACCESS = 0
+	MEMA_FUNC_ENTER = 1
+	MEMA_FUNC_EXIT = 2
+)
 
 type MemRegion struct {
 	low, hi uint64
 	perms, offset, dev, inode, pathname string
 }
 
-type MemAccess struct {
-	Time             float64
-	Pc, Bp, Sp, Addr uint64
-	IsWrite          uint64 // because alignment.
+type Record struct {
+	Type, Magic int64
+	Content [48]byte // union { MemAccess, FunctionCall }
 }
+
+var DummyRecord Record
+
+func RecordSize() int {
+	return int(unsafe.Sizeof(DummyRecord))
+}
+
+type FunctionCall struct {
+	FuncPointer uint64
+}
+
+type MemAccess struct {
+	Time			 float64
+	Pc, Bp, Sp, Addr uint64
+	IsWrite			 uint64 // because alignment.
+}
+
+func (r *Record) MemAccess() *MemAccess { return (*MemAccess)(unsafe.Pointer(&r.Content[0])) }
+func (r *Record) FunctionCall() *FunctionCall { return (*FunctionCall)(unsafe.Pointer(&r.Content[0])) }
 
 type ProgramData struct {
 	region []MemRegion
@@ -66,11 +95,23 @@ type ProgramData struct {
 	quiet_pages map[uint64] bool
 	active_pages map[uint64] bool
 	n_pages_to_left map[uint64] uint64
+	n_inactive_to_left map[uint64] uint64
 }
 
 func (a MemAccess) String() string {
 	return fmt.Sprintf("MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
 		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+}
+
+func (r Record) String() string {
+	if r.Type == MEMA_ACCESS {
+		a := r.MemAccess()
+		return fmt.Sprintf("r=%d/%x MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
+			r.Type, r.Magic, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+	}
+	f := r.FunctionCall()
+	return fmt.Sprintf("r=%d/%x FunctionCall{ptr=0x%x}",
+		r.Type, r.Magic, f.FuncPointer)
 }
 
 func (d ProgramData) RegionID(addr uint64) int {
@@ -82,9 +123,9 @@ func (d ProgramData) RegionID(addr uint64) int {
 }
 
 type UInt64Slice []uint64
-func (p UInt64Slice) Len() int           { return len(p) }
+func (p UInt64Slice) Len() int		   { return len(p) }
 func (p UInt64Slice) Less(i, j int) bool { return p[i] < p[j] }
-func (p UInt64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p UInt64Slice) Swap(i, j int)	  { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.
 func (p UInt64Slice) Sort() { sort.Sort(p) }
@@ -117,6 +158,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	d.quiet_pages = make(map[uint64] bool)
 	d.active_pages = make(map[uint64] bool)
 	d.n_pages_to_left = make(map[uint64] uint64)
+	d.n_inactive_to_left = make(map[uint64] uint64)
 	
 	// Populate the "quiet pages" map (less than 1% of the activity of the 
 	// most active page)
@@ -130,18 +172,33 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	
 	log.Print("Quiet pages: ", len(d.quiet_pages), " active: ", len(d.active_pages))
 	
-	// Build list of pages which are active
-	pages := make([]uint64, len(d.active_pages))
+	// Build list of pages which are active, count active pages to the left
+	active_pages := make([]uint64, len(d.active_pages))
 	i := 0
 	for page, _ := range d.active_pages {
-		pages[i] = page
+		active_pages[i] = page
 		i++
 	}
-	sort.Sort(UInt64Slice(pages))
-	for i := range pages {
-		page := pages[i]
-		log.Print("Page ", i, " : ", ])
-		d.n_pages_to_left[page] = i
+	sort.Sort(UInt64Slice(active_pages))
+	
+	for i := range active_pages {
+		page := active_pages[i]
+		d.n_pages_to_left[page] = uint64(i)
+	}
+
+	log.Print("Active pages: ", len(active_pages))
+	var total_inactive_to_left uint64 = 0
+	for i = range active_pages {
+		p := active_pages[i]
+		var inactive_to_left uint64
+		if i == 0 {
+			inactive_to_left = active_pages[i]
+		} else {
+			inactive_to_left = active_pages[i] - active_pages[i-1]
+		}
+		total_inactive_to_left += inactive_to_left - 1
+		d.n_inactive_to_left[p] = total_inactive_to_left
+		log.Print("Inactive to left ", p, " = ", inactive_to_left)
 	}
 	
 	return result
@@ -151,6 +208,7 @@ func min(a, b int64) int64 { if b < a { return b }; return a }
 
 func (data ProgramData) Draw(start, N int64, region_id int) bool {
 
+	//log.Print("Enter Draw")
 	//region := data.region[region_id]
 
 	var minAddr, maxAddr uint64 = math.MaxUint64, 0
@@ -170,8 +228,14 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 			maxAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE + 1)
 		}
 	}
+	
+	// Use first active page boundary as minaddr
+	minAddr = data.n_inactive_to_left[minAddr / *PAGE_SIZE] * *PAGE_SIZE
+	
+	//log.Print("Finished pruning..")
 
-	width := maxAddr - minAddr
+	//width := maxAddr - minAddr
+	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 	if width == 0 { width = 1 }
 
 	if *pageboundaries {
@@ -179,7 +243,7 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 			for p := uint64(0); p < width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				gl.Color4d(1, 1, 1, 0.25)
+				gl.Color4d(1, 1, 1, 0.1)
 				x *= margin_factor
 				gl.Vertex3f(x, -2, -10)
 				gl.Vertex3f(x, 2, -10)
@@ -192,15 +256,17 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]
-		i := data.RegionID(r.Addr)
-		if i != region_id { continue }
+		//i := data.RegionID(r.Addr)
+		page := r.Addr / *PAGE_SIZE
+		//if i != region_id { continue }
 		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
 			//log.Print("Ignoring addr: ", r.Addr)
-			continue
+			//continue
 		}
 		//log.Print("  Drawing line..")
-		x := float32(r.Addr - minAddr) / float32(width)
+		x := float32(r.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
 		x = (x - 0.5) * 4
+		//log.Print("Position: ", x)
 		x *= margin_factor
 		y := -2 + 4*float32(pos - start) / float32(N)
 		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
@@ -322,81 +388,34 @@ func main_loop(target_fps int, data ProgramData) {
 	}
 }
 
-const (
-	MEMA_ACCESS = 0
-	MEMA_FUNC_ENTER = 1
-	MEMA_FUNC_EXIT = 2
-)
-
 type Reader interface {
 	Read([]byte) (int, error)
 }
 
-func parse_block(decompressed_reader Reader, data *ProgramData) {
-	x := MemAccess{}
-	var v int64
+type Records []Record
+func (records *Records) FromBytes(bslice []byte) {
+	if len(bslice) % RecordSize() != 0 {
+		log.Panic("Unexpectedly have some bytes left over.. n=", len(bslice) % RecordSize())
+	}
+	n_records := len(bslice) / RecordSize()
+	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
+	records_header.Data = uintptr(unsafe.Pointer(&bslice[0]))
+	records_header.Len = n_records
+	records_header.Cap = n_records
+}
 
-	//r := bufio.NewReader(decompressed_reader)
-	//buf, err := r.Peek(8)
-	//log.Printf("Bytes: %q err: %q", buf, err)
+func parse_block(bslice []byte, decompressed_reader Reader, data *ProgramData) {
+	var records Records
+	records.FromBytes(bslice)
 
-	i := 0
-	buf := make([]byte, 48)
-	//junk := make([]byte, 128 - 48)
-	for {
+	for i := range records {
+		r := &records[i]
+		// TODO: Something with the other record types
+		if r.Type == MEMA_ACCESS {
+			data.access = append(data.access, *r.MemAccess())
+		}
 		i++
-		err := binary.Read(decompressed_reader, binary.LittleEndian, &v)
-		if err == io.EOF { break }
-		
-		if *MAGIC_IN_RECORD {
-			var magic uint64
-			err = binary.Read(decompressed_reader, binary.LittleEndian, &magic)
-			if err != nil {
-				log.Panic("Error reading MAGIC")
-			}
-			if magic != 0xDEADBEEF {
-				log.Printf("  magic bytes: %x", magic)
-			}
-		}
-		if v == MEMA_ACCESS {
-			err = binary.Read(decompressed_reader, binary.LittleEndian, &x)
-			if err != nil {
-				log.Panic("Error reading MEMA_ACCESS")
-			}
-			//decompressed_reader.Read(junk)
-			//log.Print("Value of v:", v, " x: ", x, " err:", err)
-		} else if v == MEMA_FUNC_ENTER {
-			// TODO: Use index into string map instead
-			// TODO: Encode this somehow. Also deref the symbol from the symbol
-			//       table
-
-			n, err := io.ReadFull(decompressed_reader, buf)
-			if err != nil || n != len(buf) {
-				log.Panic("n = ", n, " err = ", err, )
-			}
-			func_addr := binary.LittleEndian.Uint64(buf)
-			_ = func_addr
-			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
-			//log.Printf("Function Enter: 0x%x", func_addr)
-		} else if v == MEMA_FUNC_EXIT {
-			n, err := io.ReadFull(decompressed_reader, buf)
-			if err != nil || n != len(buf) {
-				log.Panic("n = ", n, " err = ", err)
-			}
-			func_addr := binary.LittleEndian.Uint64(buf)
-			_ = func_addr
-			//err := binary.Read(decompressed_reader, binary.LittleEndian, &func_addr)
-			//log.Printf("Function Exit: 0x%x", func_addr)
-		} else {
-			log.Panic("Unknown event e = ", v, " err:", err)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Panic("Unexpected error: ", err)
-		}
-		data.access = append(data.access, x)
+		continue
 	}
 
 }
@@ -454,7 +473,9 @@ func parse_file(filename string) ProgramData {
 		reader = bufio.NewReader(fd)
 	}
 
-	//reader = bufio.NewReader(fd)
+	input := make([]byte, 0, 20*1024*1024)
+	round_1 := make([]byte, 1, 20*1024*1024)
+	round_2 := make([]byte, 1, 20*1024*1024)
 
 	for {
 
@@ -467,45 +488,24 @@ func parse_file(filename string) ProgramData {
 		err = binary.Read(reader, binary.LittleEndian, &block_size)
 		log.Print("Reading block with size: ", block_size)
 
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Panic("Error: ", err)
-		}
-
-		// BUG! TODO
-		if block_size > 10*1024*1024 {
-			log.Panic("Unexpectedly huge block, possible format issue: ", block_size)
-			log.Print("There is something I don't understand about the format..")
-			break
-		}
+		if err == io.EOF { break }
+		if err != nil { log.Panic("Error: ", err) }
 
 		r := io.LimitReader(reader, block_size)
-		
+		input = input[0:block_size]
 		var decompressed_reader io.Reader = r
 		
 		if *compressed {
-			round_1 := lz4.NewReader(r)
-			round_2 := lz4.NewReader(round_1)
-			decompressed_reader = round_2
-		}
-		
-		//decompressed_reader := r
-		
-		defer func() {
-			if e := recover(); e != nil {
-				offset, _ := fd.Seek(0, os.SEEK_CUR)
-				buf, err := reader.Peek(8)
-				log.Printf("Bytes: %q err: %q", buf, err)
-				log.Print("!Reading from location ", offset, " - ", 	
-						  offset-int64(reader.Buffered()), " buf = ", 
-						  reader.Buffered(), " offs = ", offset)
-				log.Panic("Panicked = ", e, " bytes remain: ", r.(*io.LimitedReader).N)
+			n, err := io.ReadFull(r, input)
+			if int64(n) != block_size {
+				log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
 			}
-		}()
+			LZ4_uncompress_unknownOutputSize(input, &round_1)
+			LZ4_uncompress_unknownOutputSize(round_1, &round_2)
+			decompressed_reader = bytes.NewBuffer(round_2)
+		}
 
-		parse_block(decompressed_reader, &data)
+		parse_block(round_2, decompressed_reader, &data)
 
 		if *nrec != 0 && int64(len(data.access)) > *nrec {
 			break
@@ -518,16 +518,25 @@ func parse_file(filename string) ProgramData {
 }
 
 func main() {
-
-	if (*verbose) {
-		log.Print("Startup")
-		defer log.Print("Shutdown")
-	}
-
 	flag.Parse()
 
 	if flag.NArg() != 1 {
 		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
+	}
+
+	if *cpuprofile != "" {
+		log.Print("Profiling to ", *cpuprofile)
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	if *verbose {
+		log.Print("Startup")
+		defer log.Print("Shutdown")
 	}
 
 	data := parse_file(flag.Arg(0))
