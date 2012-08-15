@@ -227,7 +227,20 @@ func draw() {
 
 }
 
-func main_loop(target_fps int, data ProgramData, ) {
+func Capture() {
+	// TODO: co-ordinates, filename, cleverness to stitch many together
+	im := image.NewNRGBA(image.Rect(0, 0, 400, 400))
+	gl.ReadBuffer(gl.BACK_LEFT)
+	gl.ReadPixels(0, 0, 400, 400, gl.RGBA, im.Pix)
+	
+	fd, err := os.Create("test.png")
+	if err != nil { log.Panic("Err: ", err) }
+	defer fd.Close()
+	
+	png.Encode(fd, im)
+}
+
+func main_loop(target_fps int, data ProgramData) {
 
 	target_frame_period := time.Second / time.Duration(target_fps)
 	
