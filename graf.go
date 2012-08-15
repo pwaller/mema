@@ -8,26 +8,6 @@ import (
     "github.com/banthar/gl"
 )
 
-func arrow() {
-
-    const size = 1
-    
-    gl.PushMatrix(); defer gl.PopMatrix()
-    gl.Scalef(size, size, size)
-
-    gl.LineWidth(1.5)
-    gl.Color4f(0.5, 1, 0.5, 1) //0.1) //, 0.5)
-    gl.Begin(gl.LINES)
-    gl.Vertex2f(0, 0)
-    gl.Vertex2f(0, 0.5)
-    gl.Vertex3f(0,     0.5, 0.01)
-    gl.Vertex3f(+0.15, 0.25, 0.01)
-    gl.Vertex3f(0,     0.5, 0.01)
-    gl.Vertex3f(-0.15, 0.25, 0.01)
-    gl.End()
-    
-}
-
 func Init(printInfo bool) {
 	//pos := []float32{5.0, 5.0, 10.0, 0.0}
 	//red := []float32{0.8, 0.1, 0.0, 1.0}
