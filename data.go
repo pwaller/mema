@@ -297,8 +297,9 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	return result
 }
 
-
 func (data ProgramData) Draw(start, N int64) bool {
+	defer OpenGLSentinel()()
+	
 	var minAddr, maxAddr uint64 = math.MaxUint64, 0
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
@@ -320,52 +321,68 @@ func (data ProgramData) Draw(start, N int64) bool {
 	
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 	if width == 0 { width = 1 }
-
+	
+	gl.LineWidth(1)
+	
 	if *pageboundaries {
-		if width / *PAGE_SIZE < 100 { // If we try and draw too many of these, X will hang
+		
+		var vc ColorVertices
+		boundary_color := Color{64, 64, 64, 255}
+		
+		if width / *PAGE_SIZE < 1000 { // If we try and draw too many of these, X will hang
 			for p := uint64(0); p < width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				gl.Color4d(0.25, 0.25, 0.25, 1)
 				x *= margin_factor
-				gl.Vertex2f(x, -2)
-				gl.Vertex2f(x, 2)
+				vc = append(vc, ColorVertex{boundary_color, Vertex{x, -2}})
+				vc = append(vc, ColorVertex{boundary_color, Vertex{x,  2}})
 			}
 		}
+		
+		vc.Draw()
 	}
 
+	var vc ColorVertices
+		
 	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//       Function calls here appear to be the biggest bottleneck
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
+		
 		r := &data.access[pos]
 		page := r.Addr / *PAGE_SIZE
 		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
 			continue
 		}
-		//log.Print("  Drawing line..")
+		
 		x := float32(r.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
 		x = (x - 0.5) * 4
 		x *= margin_factor
 		y := -2 + 4*float32(pos - start) / float32(N)
-		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
-		gl.Vertex2f(x, y)
-		gl.Vertex2f(x, y + 0.0125 / 2)
-		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1)
-		gl.Vertex2f(x, 2 + 0.1)
-		gl.Vertex2f(x, 2)
-
+		
+		c := Color{uint8(r.IsWrite)*255, uint8(1-r.IsWrite)*255, 0, 255}
+		
+		vc.Add(ColorVertex{c, Vertex{x, y}})
+		vc.Add(ColorVertex{c, Vertex{x, y + 0.0125}})
+		vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
+		vc.Add(ColorVertex{c, Vertex{x, 2}})
 	}
+	
+	vc.Draw()
+	
+	var eolmarker ColorVertices
 	
 	// Draw end-of-data marker
 	if start + N > int64(len(data.access)) {
 		y := -2 + 4*float32(int64(len(data.access)) - start) / float32(N)
-		gl.Color4d(1, 1, 1, 1)
-		gl.Vertex2f(-2, y)
-		gl.Vertex2f( 2, y)
+		c := Color{255, 255, 255, 255}
+		eolmarker.Add(ColorVertex{c, Vertex{-2, y}})
+		eolmarker.Add(ColorVertex{c, Vertex{ 2, y}})
 	}
+	gl.LineWidth(10)
+	eolmarker.Draw()
+	
 	return start > int64(len(data.access))
-
 }
 

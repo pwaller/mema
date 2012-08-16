@@ -64,13 +64,11 @@ func main_loop(data ProgramData) {
 		//		 (i.e, pause and zoom functionality)
 		i += *nfram
 
-		gl.Begin(gl.LINES)
 		N := *nback
 		wrapped := data.Draw(i, N)
 		if wrapped {
 			i = -int64(*nback)
 		}
-		gl.End()
 		
 		// TODO: Move matrix hackery somewhere else
 		gl.MatrixMode(gl.PROJECTION)
@@ -85,6 +83,7 @@ func main_loop(data ProgramData) {
 		gl.PopMatrix()
 		gl.MatrixMode(gl.MODELVIEW)
 		
+		OpenGLSentinel()
 		glfw.SwapBuffers()
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
@@ -125,6 +124,6 @@ func main() {
 
 	cleanup := make_window(400, 400, "Memory Accesses")
 	defer cleanup()
-
+	
 	main_loop(data)
 }

@@ -10,6 +10,8 @@ import (
 	"code.google.com/p/freetype-go/freetype"
 )
 
+var FontFile = "env/src/code.google.com/p/freetype-go/luxi-fonts/luximr.ttf"
+
 type Text struct {
 	str string
 	w, h int
@@ -17,11 +19,13 @@ type Text struct {
 }
 
 func MakeText(str string, size float64) Text {
+	defer OpenGLSentinel()()
 
 	var text Text
 	text.str = str
 
-	fontBytes, err := ioutil.ReadFile("env/src/code.google.com/p/freetype-go/luxi-fonts/luximr.ttf")
+    // TODO: Something if font doesn't exist
+	fontBytes, err := ioutil.ReadFile(FontFile)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -29,8 +33,7 @@ func MakeText(str string, size float64) Text {
 	if err != nil {
 		log.Panic(err)
 	}
-
-	// TODO: Two passes with DrawString, so that the 
+	
 	fg, bg := image.White, image.Black
 	c := freetype.NewContext()
 	c.SetDPI(72)
@@ -66,27 +69,30 @@ func MakeText(str string, size float64) Text {
 		text.id.Delete()
 		log.Panic("Failed to load a texture, err = ", gl.GetError())
 	}
-	
+		
 	return text
 }
 
 func (text *Text) Draw(x, y int) {
-	var w, h int = text.w, text.h
+	defer OpenGLSentinel()()
+	
+	var w, h int = text.w / 2, text.h / 2
 	var u, v, u2, v2 float32 = 0, 1, 1, 0
 	text.id.Bind(gl.TEXTURE_2D)
+	
 	gl.Begin(gl.QUADS)
 
-	gl.TexCoord2f(float32(u), float32(v))
-	gl.Vertex2i(int(x), int(y))
+	gl.TexCoord2f(u, v)
+	gl.Vertex2i(x, y)
 
-	gl.TexCoord2f(float32(u2), float32(v))
-	gl.Vertex2i(int(x+w), int(y))
+	gl.TexCoord2f(u2, v)
+	gl.Vertex2i(x+w, y)
 
-	gl.TexCoord2f(float32(u2), float32(v2))
-	gl.Vertex2i(int(x+w), int(y+h))
-
-	gl.TexCoord2f(float32(u), float32(v2))
-	gl.Vertex2i(int(x), int(y+h))
+	gl.TexCoord2f(u2, v2)
+	gl.Vertex2i(x+w, y+h)
+	
+	gl.TexCoord2f(u, v2)
+	gl.Vertex2i(x, y+h)
 
 	gl.End()
 }

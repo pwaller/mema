@@ -3,10 +3,42 @@ package main
 import (
     "log"
     "runtime"
+    "unsafe"
     
     "github.com/jteeuwen/glfw"
     "github.com/banthar/gl"
 )
+
+
+func OpenGLSentinel() (func ()) {
+	check := func () {
+		e := gl.GetError()
+		if e != gl.NO_ERROR {
+			log.Panic("Encountered GLError: ", e)
+		}
+	}
+	check()
+	return check
+}
+
+type Vertex struct { x, y float32 }
+type Color struct { r, g, b, a uint8 }
+type ColorVertex struct { Color; Vertex }
+type ColorVertices []ColorVertex
+
+func (vcs ColorVertices) Draw() {
+	if len(vcs) < 1 { return }
+	
+	gl.PushClientAttrib(0xFFFFFFFF) //gl.CLIENT_ALL_ATTRIB_BITS)
+	defer gl.PopClientAttrib()
+	
+	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
+	gl.DrawArrays(gl.LINES, 0, len(vcs))
+}
+
+func (vcs *ColorVertices) Add(v ColorVertex) {
+	*vcs = append(*vcs, v)
+}
 
 func Init() {
 	//gl.Enable(gl.DEPTH_TEST)
