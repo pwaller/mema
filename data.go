@@ -345,8 +345,11 @@ func (data ProgramData) Draw(start, N int64) bool {
 		
 		vc.Add(ColorVertex{c, Vertex{x, y}})
 		vc.Add(ColorVertex{c, Vertex{x, y + 0.0125}})
-		vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
-		vc.Add(ColorVertex{c, Vertex{x, 2}})
+		
+		if pos > (start + N) - N / 20 {
+			vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
+			vc.Add(ColorVertex{c, Vertex{x, 2}})
+		}
 	}
 	
 	vc.Draw()
