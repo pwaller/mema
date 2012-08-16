@@ -191,12 +191,10 @@ void __mema_empty_buffer() {
     size_t compressed_size = 0;
     //snappy::RawCompress
     
-    // First round, compression ratio ~17:1
     compressed_size = LZ4_compress(
       uncompressed_data,
       compressed, uncompressed_size);
     
-    // Second round of LZ4, ultimate ratio ~66:1
     size_t len1 = LZ4_compressBound(compressed_size);
     char * compressed1 = new char[len1];
     size_t compressed_size1 = 0;
@@ -217,6 +215,7 @@ void __mema_empty_buffer() {
     //PrintBytes("  ", (uptr*)(compressed+0*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+1*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+2*kWordSize));
+    delete compressed1;
     delete compressed;
     
     if (flags()->debug && flags()->verbosity > 0)              
@@ -330,8 +329,8 @@ void __mema_function_exit(uptr addr, const char* name) {
   }
 }
 
-void __mema_enable()  { flags()->disable = false; }
-void __mema_disable() { flags()->disable = true ; }
+void __mema_enable()  { if (flags()->verbosity) printf("__mema_enable()\n");  flags()->disable = false; }
+void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); flags()->disable = true ; }
 
 void __mema_access(void* addr, char size, bool is_write) {
   if (flags()->disable) return;
@@ -364,10 +363,11 @@ void __mema_access(void* addr, char size, bool is_write) {
 
 
 void __mema_finalize() {
-  if (flags()->disable) return;
+  //if (flags()->disable) return;
   printf("mema_finalize()\n");
   __mema_empty_buffer();
-  close(memaccess_fd);
+  if (memaccess_fd != -1)
+    close(memaccess_fd);
 }
 
 static bool mema_initialized = false;
@@ -386,7 +386,6 @@ void __mema_initialize() {
     printf("memaccess_filename not set\n");
     return;
   }
-  if (flags()->disable) return;
   
   memaccess_fd = open(flags()->filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
   
