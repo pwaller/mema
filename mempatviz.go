@@ -64,6 +64,8 @@ func main_loop(data ProgramData) {
 		
 	var i int64 = -int64(*nback)
 	
+	text := MakeText("Hello, world", 32.)
+	
 	done := false
 	for !done {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -78,7 +80,19 @@ func main_loop(data ProgramData) {
 			i = -int64(*nback)
 		}
 		gl.End()
-
+		
+		gl.MatrixMode(gl.PROJECTION)
+		gl.PushMatrix()
+		gl.LoadIdentity()
+		// TODO: Use orthographic window co-ordinate space for font consistency?
+		gl.Ortho(0, 400, 0, 400, -1, 1)
+		gl.Color4f(1, 1, 1, 1)
+		gl.Enable(gl.TEXTURE_2D)
+		text.Draw(0, 0)
+		gl.Disable(gl.TEXTURE_2D)
+		gl.PopMatrix()
+		gl.MatrixMode(gl.MODELVIEW)
+		
 		glfw.SwapBuffers()
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
