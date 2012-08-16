@@ -1,9 +1,14 @@
 /env/
 
 # Binary
-/mempatviz
+/memaviz
 
-/asan
-/llvm
+/asan/
+/llvm/
+/tmp/
 
 /.envrc
+
+*.mema
+*.memac
+*.pprof
