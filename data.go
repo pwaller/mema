@@ -22,15 +22,13 @@ const (
 	MEMA_FUNC_EXIT = 2
 )
 
-type MemRegion struct {
-	low, hi uint64
-	perms, offset, dev, inode, pathname string
-}
-
 type Record struct {
 	Type, Magic int64
 	Content [48]byte // union { MemAccess, FunctionCall }
 }
+
+func (r *Record) MemAccess() *MemAccess { return (*MemAccess)(unsafe.Pointer(&r.Content[0])) }
+func (r *Record) FunctionCall() *FunctionCall { return (*FunctionCall)(unsafe.Pointer(&r.Content[0])) }
 
 var DummyRecord Record
 
@@ -38,31 +36,18 @@ func RecordSize() int {
 	return int(unsafe.Sizeof(DummyRecord))
 }
 
-type FunctionCall struct {
-	FuncPointer uint64
-}
+type Records []Record
 
-type MemAccess struct {
-	Time			 float64
-	Pc, Bp, Sp, Addr uint64
-	IsWrite			 uint64 // because alignment.
-}
-
-func (r *Record) MemAccess() *MemAccess { return (*MemAccess)(unsafe.Pointer(&r.Content[0])) }
-func (r *Record) FunctionCall() *FunctionCall { return (*FunctionCall)(unsafe.Pointer(&r.Content[0])) }
-
-type ProgramData struct {
-	region []MemRegion
-	access []MemAccess
-	quiet_pages map[uint64] bool
-	active_pages map[uint64] bool
-	n_pages_to_left map[uint64] uint64
-	n_inactive_to_left map[uint64] uint64
-}
-
-func (a MemAccess) String() string {
-	return fmt.Sprintf("MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
-		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+func (records *Records) FromBytes(bslice []byte) {
+	if len(bslice) % RecordSize() != 0 {
+		log.Panic("Unexpectedly have some bytes left over.. n=", 
+				  len(bslice) % RecordSize())
+	}
+	n_records := len(bslice) / RecordSize()
+	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
+	records_header.Data = uintptr(unsafe.Pointer(&bslice[0]))
+	records_header.Len = n_records
+	records_header.Cap = n_records
 }
 
 func (r Record) String() string {
@@ -76,6 +61,157 @@ func (r Record) String() string {
 		r.Type, r.Magic, f.FuncPointer)
 }
 
+type FunctionCall struct {
+	FuncPointer uint64
+}
+
+type MemAccess struct {
+	Time			 float64
+	Pc, Bp, Sp, Addr uint64
+	IsWrite			 uint64 // because alignment.
+}
+
+func (a MemAccess) String() string {
+	return fmt.Sprintf("MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
+		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+}
+
+
+type MemRegion struct {
+	low, hi uint64
+	perms, offset, dev, inode, pathname string
+}
+
+type ProgramData struct {
+	region []MemRegion
+	access []MemAccess
+	quiet_pages map[uint64] bool
+	active_pages map[uint64] bool
+	n_pages_to_left map[uint64] uint64
+	n_inactive_to_left map[uint64] uint64
+}
+
+func NewProgramData(filename string) ProgramData {
+	var data ProgramData
+	
+	fd, err := os.Open(filename)
+	defer fd.Close()
+	if err != nil {
+		log.Panic("Fatal error: ", err)
+	}
+	
+	reader := bufio.NewReaderSize(fd, 10*1024*1024)
+
+	data.ParseHeader(reader)	
+	data.ParsePageTable(reader)
+	data.ParseBlocks(reader)
+
+	log.Print("Read ", len(data.access), " records")
+	
+	active_regions := data.ActiveRegionIDs()
+	if *verbose {
+		log.Printf("Have %d active regions", len(active_regions))
+	}
+	
+	if *debug {
+		log.Print("Region info:")
+		for i := range data.region {
+			log.Print(" ", data.region[i])
+		}
+	}
+
+	return data
+}
+
+func (data *ProgramData) ParseHeader(reader *bufio.Reader) {
+	magic_buf := make([]byte, 8)
+	_, err := reader.Read(magic_buf)
+	if err != nil || string(magic_buf) != "MEMACCES" {
+		log.Panic("Error reading magic bytes: ", err, " bytes=", magic_buf)
+	}
+}
+
+func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
+	page_table_bytes, err := reader.ReadBytes('\x00')
+	if err != nil {
+		log.Panic("Error reading page table: ", err)
+	}
+	if *verbose {
+		log.Printf("Page table size: %d bytes", len(page_table_bytes))
+	}
+
+	page_table := string(page_table_bytes[:len(page_table_bytes)-1])
+	page_table_lines := strings.Split(page_table, "\n")
+
+	for i := range page_table_lines {
+		line := page_table_lines[i]
+		if len(line) == 0 {
+			continue
+		}
+		x := MemRegion{}
+
+		_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s %s", &x.low, &x.hi, 
+							 &x.perms, &x.offset, &x.dev, &x.inode, &x.pathname)
+		if err != nil {
+			_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s", &x.low, &x.hi, 
+								 &x.perms, &x.offset, &x.dev, &x.inode)
+			x.pathname = ""
+			if err != nil {
+				log.Panic("Error parsing: ", err, " '", line, "'")
+			}
+		}
+		data.region = append(data.region, x)
+	}
+}
+
+func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
+	// These buffers must have a maximum capacity which can fit whatever we 
+	// throw at them, and the rounds must have an initial length so that
+	// the first byte can be addressed.
+	input := make([]byte, 0, 20*1024*1024)
+	round_1 := make([]byte, 1, 20*1024*1024)
+	round_2 := make([]byte, 1, 20*1024*1024)
+
+	for {
+		var block_size int64
+		err := binary.Read(reader, binary.LittleEndian, &block_size)
+		if err == io.EOF { break }
+		if err != nil { log.Panic("Error: ", err) }
+		
+		if *debug { log.Print("Reading block with size: ", block_size) }
+		
+		r := io.LimitReader(reader, block_size)
+		input = input[0:block_size]
+		n, err := io.ReadFull(r, input)
+		
+		if int64(n) != block_size {
+			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
+		}
+		LZ4_uncompress_unknownOutputSize(input, &round_1)
+		LZ4_uncompress_unknownOutputSize(round_1, &round_2)
+
+		data.ParseBlock(round_2)
+
+		// Read only a limited number of records > nrec, if set.
+		if *nrec != 0 && int64(len(data.access)) > *nrec { break }
+	}
+}
+
+func (data *ProgramData) ParseBlock(bslice []byte) {
+	var records Records
+	records.FromBytes(bslice)
+
+	for i := range records {
+		r := &records[i]
+		// TODO: Something with the other record types
+		if r.Type == MEMA_ACCESS {
+			data.access = append(data.access, *r.MemAccess())
+		}
+		i++
+		continue
+	}
+}
+
 func (d ProgramData) RegionID(addr uint64) int {
 	for i := range d.region {
 		if d.region[i].low < addr && addr < d.region[i].hi { return i }
@@ -86,6 +222,7 @@ func (d ProgramData) RegionID(addr uint64) int {
 
 
 func (d *ProgramData) ActiveRegionIDs() []int {
+	// TODO: Quite a bite of this wants to be moved into NewProgramData
 	active := make(map[int] bool)
 	page_activity := make(map[uint64] int)
 	
@@ -141,7 +278,6 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 		d.n_pages_to_left[page] = uint64(i)
 	}
 
-	log.Print("Active pages: ", len(active_pages))
 	var total_inactive_to_left uint64 = 0
 	for i = range active_pages {
 		p := active_pages[i]
@@ -153,28 +289,21 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 		}
 		total_inactive_to_left += inactive_to_left - 1
 		d.n_inactive_to_left[p] = total_inactive_to_left
-		log.Print("Inactive to left ", p, " = ", inactive_to_left)
 	}
 	
 	return result
 }
 
 
-func (data ProgramData) Draw(start, N int64, region_id int) bool {
-
-	//log.Print("Enter Draw")
-	//region := data.region[region_id]
-
+func (data ProgramData) Draw(start, N int64) bool {
 	var minAddr, maxAddr uint64 = math.MaxUint64, 0
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]
 		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
-			//log.Print("Ignoring addr: ", r.Addr)
 			continue
 		}
-		if data.RegionID(r.Addr) != region_id { continue }
 		if r.Addr < minAddr {
 			minAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE)
 		}
@@ -186,9 +315,6 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 	// Use first active page boundary as minaddr
 	minAddr = data.n_inactive_to_left[minAddr / *PAGE_SIZE] * *PAGE_SIZE
 	
-	//log.Print("Finished pruning..")
-
-	//width := maxAddr - minAddr
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 	if width == 0 { width = 1 }
 
@@ -199,170 +325,41 @@ func (data ProgramData) Draw(start, N int64, region_id int) bool {
 				x = (x - 0.5) * 4
 				gl.Color4d(0.25, 0.25, 0.25, 1)
 				x *= margin_factor
-				gl.Vertex3f(x, -2, -10)
-				gl.Vertex3f(x, 2, -10)
+				gl.Vertex2f(x, -2)
+				gl.Vertex2f(x, 2)
 			}
 		}
 	}
-	//return false
-	//log.Print("Enter loop")
 
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]
-		//i := data.RegionID(r.Addr)
 		page := r.Addr / *PAGE_SIZE
-		//if i != region_id { continue }
 		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
-			//log.Print("Ignoring addr: ", r.Addr)
-			//continue
+			continue
 		}
 		//log.Print("  Drawing line..")
 		x := float32(r.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
 		x = (x - 0.5) * 4
-		//log.Print("Position: ", x)
 		x *= margin_factor
 		y := -2 + 4*float32(pos - start) / float32(N)
 		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1+math.Log(1.-float64(N - (pos - start))/float64(N))/3)
-		//log.Print("iswrite: ", r.IsWrite, " ", float64(1-r.IsWrite), float64(r.IsWrite))
-		gl.Vertex3f(x, y, -10)
-		//gl.Vertex3f(x+(float32(r.IsWrite)-0.5)*0.05, y+0.0125, -10)
-		gl.Vertex3f(x, y+0.0125, -10)
+		gl.Vertex2f(x, y)
+		gl.Vertex2f(x, y + 0.0125 / 2)
 		gl.Color4d(float64(r.IsWrite), float64(1-r.IsWrite), 0, 1)
-		gl.Vertex3f(x, 2 + 0.1, -10)
-		gl.Vertex3f(x, 2, -10)
+		gl.Vertex2f(x, 2 + 0.1)
+		gl.Vertex2f(x, 2)
 
 	}
+	
+	// Draw end-of-data marker
 	if start + N > int64(len(data.access)) {
 		y := -2 + 4*float32(int64(len(data.access)) - start) / float32(N)
 		gl.Color4d(1, 1, 1, 1)
-		gl.Vertex3f(-2, y, -10)
-		gl.Vertex3f( 2, y, -10)
+		gl.Vertex2f(-2, y)
+		gl.Vertex2f( 2, y)
 	}
 	return start > int64(len(data.access))
 
 }
 
-
-type Records []Record
-func (records *Records) FromBytes(bslice []byte) {
-	if len(bslice) % RecordSize() != 0 {
-		log.Panic("Unexpectedly have some bytes left over.. n=", len(bslice) % RecordSize())
-	}
-	n_records := len(bslice) / RecordSize()
-	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
-	records_header.Data = uintptr(unsafe.Pointer(&bslice[0]))
-	records_header.Len = n_records
-	records_header.Cap = n_records
-}
-
-func parse_block(bslice []byte, data *ProgramData) {
-	var records Records
-	records.FromBytes(bslice)
-
-	for i := range records {
-		r := &records[i]
-		// TODO: Something with the other record types
-		if r.Type == MEMA_ACCESS {
-			data.access = append(data.access, *r.MemAccess())
-		}
-		i++
-		continue
-	}
-
-}
-
-func parse_file(filename string) ProgramData {
-	fd, err := os.Open(filename)
-	defer fd.Close()
-	if err != nil {
-		log.Panic("Fatal error: ", err)
-	}
-
-	magic_buf := make([]byte, 8)
-
-	_, err = fd.Read(magic_buf)
-	if err != nil || string(magic_buf) != "MEMACCES" {
-		log.Panic("Error reading magic bytes: ", err, " bytes=", magic_buf)
-	}
-
-	reader := bufio.NewReaderSize(fd, 10*1024*1024)
-		
-	page_table_bytes, err := reader.ReadBytes('\x00')
-	if err != nil {
-		log.Panic("Error reading file: ", err)
-	}
-	
-	log.Print("Read ", len(page_table_bytes), " bytes")
-
-	var data ProgramData
-
-	page_table := string(page_table_bytes[:len(page_table_bytes)-1])
-	page_table_lines := strings.Split(page_table, "\n")
-
-	for i := range page_table_lines {
-		line := page_table_lines[i]
-		if len(line) == 0 {
-			continue
-		}
-		x := MemRegion{}
-
-		_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s %s", &x.low, &x.hi, 
-							 &x.perms, &x.offset, &x.dev, &x.inode, &x.pathname)
-		if err != nil {
-			_, err := fmt.Sscanf(line, "%x-%x %s %s %s %s", &x.low, &x.hi, 
-								 &x.perms, &x.offset, &x.dev, &x.inode)
-			x.pathname = ""
-			if err != nil {
-				log.Panic("Error parsing: ", err, " '", line, "'")
-			}
-		}
-		data.region = append(data.region, x)
-	}
-
-	if *jump != 0 {
-		fd.Seek(*jump, os.SEEK_SET)
-		reader = bufio.NewReader(fd)
-	}
-
-	input := make([]byte, 0, 20*1024*1024)
-	round_1 := make([]byte, 1, 20*1024*1024)
-	round_2 := make([]byte, 1, 20*1024*1024)
-
-	for {
-
-		//offset, err := fd.Seek(0, os.SEEK_CUR)
-		//log.Print("Reading from location ", offset-int64(reader.Buffered()), " buf = ", reader.Buffered(), " offs = ", offset)
-		//buf, err := reader.Peek(8)
-		//log.Printf("Bytes: %q", buf)
-
-		var block_size int64
-		err = binary.Read(reader, binary.LittleEndian, &block_size)
-		log.Print("Reading block with size: ", block_size)
-
-		if err == io.EOF { break }
-		if err != nil { log.Panic("Error: ", err) }
-
-		r := io.LimitReader(reader, block_size)
-		input = input[0:block_size]
-		
-		if *compressed {
-			n, err := io.ReadFull(r, input)
-			if int64(n) != block_size {
-				log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
-			}
-			LZ4_uncompress_unknownOutputSize(input, &round_1)
-			LZ4_uncompress_unknownOutputSize(round_1, &round_2)
-		}
-
-		parse_block(round_2, &data)
-
-		if *nrec != 0 && int64(len(data.access)) > *nrec {
-			break
-		}
-	}
-
-	log.Print("Read ", len(data.access))
-
-	return data
-}

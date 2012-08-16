@@ -8,7 +8,7 @@ import (
     "github.com/banthar/gl"
 )
 
-func Init(printInfo bool) {
+func Init() {
 	//gl.Enable(gl.DEPTH_TEST)
 	
 	// Anti-aliasing
@@ -18,14 +18,6 @@ func Init(printInfo bool) {
     gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
     //gl.BlendFunc(gl.SRC_ALPHA_SATURATE, gl.ONE)
     //gl.Hint(gl.LINE_SMOOTH_HINT, gl.NICEST)
-    
-	if printInfo {
-		print("GL_RENDERER   = ", gl.GetString(gl.RENDERER), "\n")
-		print("GL_VERSION    = ", gl.GetString(gl.VERSION), "\n")
-		print("GL_VENDOR     = ", gl.GetString(gl.VENDOR), "\n")
-		print("GL_EXTENSIONS = ", gl.GetString(gl.EXTENSIONS), "\n")
-	}
-
 }
 
 func make_window(w, h int, title string) func() {
@@ -49,7 +41,7 @@ func make_window(w, h int, title string) func() {
 	glfw.SetWindowTitle(title)
 	glfw.SetWindowSizeCallback(Reshape)
 
-	Init(*printInfo)
+	Init()
 	
 	return func() {
 	    glfw.Terminate()
@@ -66,7 +58,7 @@ func Reshape(width, height int) {
 	gl.MatrixMode(gl.PROJECTION)
 	gl.LoadIdentity()	
 	//gl.Frustum(-1.0, 1.0, -h, h, 5.0, 60.0)
-	gl.Ortho(-2, 2, -2, 2.2, 5, 60)
+	gl.Ortho(-2, 2, -2, 2.1, -1, 1)
 	
 	gl.MatrixMode(gl.MODELVIEW)
 	gl.LoadIdentity()
