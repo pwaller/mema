@@ -104,6 +104,9 @@ func NewProgramData(filename string) ProgramData {
 
 	data.ParseHeader(reader)	
 	data.ParsePageTable(reader)
+	
+	// TODO: Stripe across the file to find where blocks are
+	// TODO: Load on demand sections which will be read
 	data.ParseBlocks(reader)
 
 	log.Print("Read ", len(data.access), " records")
@@ -331,6 +334,9 @@ func (data ProgramData) Draw(start, N int64) bool {
 		}
 	}
 
+	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
+	// TODO: Transport vertices to the GPU in bulk using glBufferData
+	//       Function calls here appear to be the biggest bottleneck
 	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
 		if pos < 0 { continue }
 		r := &data.access[pos]

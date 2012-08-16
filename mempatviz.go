@@ -1,16 +1,5 @@
 package main
 
-// TODO: Load on demand sections which will be read
-// TODO: pre-compute what needs to be rendered
-
-// python file position at startup: 6649665347
-
-// end of building 0 containing array: 6657004931
-// end of "from random import random" 7424515715 / 7425564227
-// end of building random array: 7436049347
-// end of sorting random array: 7442340419
-// final size: 7752248915
-
 import (
 	
 	"flag"
@@ -70,7 +59,9 @@ func main_loop(data ProgramData) {
 	for !done {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		gl.LineWidth(1)
-
+		
+		// TODO: Ability to modify *nfram and *nback at runtiem
+		//		 (i.e, pause and zoom functionality)
 		i += *nfram
 
 		gl.Begin(gl.LINES)
@@ -81,6 +72,7 @@ func main_loop(data ProgramData) {
 		}
 		gl.End()
 		
+		// TODO: Move matrix hackery somewhere else
 		gl.MatrixMode(gl.PROJECTION)
 		gl.PushMatrix()
 		gl.LoadIdentity()
