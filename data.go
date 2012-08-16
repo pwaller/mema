@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"reflect"
 	"sort"
@@ -299,25 +298,6 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 
 func (data ProgramData) Draw(start, N int64) bool {
 	defer OpenGLSentinel()()
-	
-	var minAddr, maxAddr uint64 = math.MaxUint64, 0
-
-	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
-		if pos < 0 { continue }
-		r := &data.access[pos]
-		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
-			continue
-		}
-		if r.Addr < minAddr {
-			minAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE)
-		}
-		if r.Addr > maxAddr {
-			maxAddr = *PAGE_SIZE * (r.Addr / *PAGE_SIZE + 1)
-		}
-	}
-	
-	// Use first active page boundary as minaddr
-	minAddr = data.n_inactive_to_left[minAddr / *PAGE_SIZE] * *PAGE_SIZE
 	
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 	if width == 0 { width = 1 }
