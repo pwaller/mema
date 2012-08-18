@@ -32,7 +32,7 @@ var PAGE_SIZE = flag.Uint64("page-size", 4096, "page-size")
 
 var margin_factor = float32(1) //0.975)
 
-func main_loop(data ProgramData) {
+func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
 

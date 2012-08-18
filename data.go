@@ -27,8 +27,13 @@ type Record struct {
 	Content [48]byte // union { MemAccess, FunctionCall }
 }
 
-func (r *Record) MemAccess() *MemAccess { return (*MemAccess)(unsafe.Pointer(&r.Content[0])) }
-func (r *Record) FunctionCall() *FunctionCall { return (*FunctionCall)(unsafe.Pointer(&r.Content[0])) }
+func (r *Record) MemAccess() *MemAccess {
+	return (*MemAccess)(unsafe.Pointer(&r.Content[0]))
+}
+
+func (r *Record) FunctionCall() *FunctionCall {
+	return (*FunctionCall)(unsafe.Pointer(&r.Content[0]))
+}
 
 var DummyRecord Record
 
@@ -89,14 +94,17 @@ type MemRegion struct {
 type ProgramData struct {
 	region []MemRegion
 	access []MemAccess
+	records Records
+	nrecords int64
 	quiet_pages map[uint64] bool
 	active_pages map[uint64] bool
 	n_pages_to_left map[uint64] uint64
 	n_inactive_to_left map[uint64] uint64
+	vertex_data []*ColorVertices
 }
 
-func NewProgramData(filename string) ProgramData {
-	var data ProgramData
+func NewProgramData(filename string) *ProgramData {
+	data := &ProgramData{}
 	
 	fd, err := os.Open(filename)
 	defer fd.Close()
@@ -197,11 +205,15 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 		LZ4_uncompress_unknownOutputSize(input, &round_1)
 		LZ4_uncompress_unknownOutputSize(round_1, &round_2)
 
-		data.ParseBlock(round_2)
+		var records Records
+		records.FromBytes(round_2)
+		data.records = append(data.records, records...)
+		data.nrecords += int64(len(records))
 
 		// Read only a limited number of records > nrec, if set.
-		if *nrec != 0 && int64(len(data.access)) > *nrec { break }
+		if *nrec != 0 && int64(data.nrecords) > *nrec { break }
 	}
+	log.Print("Total records: ", data.nrecords)
 }
 
 func (data *ProgramData) ParseBlock(bslice []byte) {
@@ -233,8 +245,11 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	active := make(map[int] bool)
 	page_activity := make(map[uint64] int)
 	
-	for i := range d.access {
-		a := &d.access[i]
+	for i := range d.records {
+		r := &d.records[i]
+		if r.Type != MEMA_ACCESS { continue }
+		a := r.MemAccess()
+		//a := &d.access[i]
 		active[d.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 		
@@ -262,7 +277,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	// Populate the "quiet pages" map (less than 1% of the activity of the 
 	// most active page)
 	for page, value := range page_activity {
-		if value < highest_page_activity / 100 {
+		if false && value < highest_page_activity / 1000 {
 			d.quiet_pages[page] = true
 			continue
 		}
@@ -301,7 +316,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	return result
 }
 
-func (data ProgramData) Draw(start, N int64) bool {
+func (data *ProgramData) Draw(start, N int64) bool {
 	defer OpenGLSentinel()()
 	
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
@@ -318,59 +333,111 @@ func (data ProgramData) Draw(start, N int64) bool {
 			for p := uint64(0); p < width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				x *= margin_factor
-				vc = append(vc, ColorVertex{boundary_color, Vertex{x, -2}})
-				vc = append(vc, ColorVertex{boundary_color, Vertex{x,  2}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x, -2}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x,  2}})
 			}
 		}
 		
 		vc.Draw()
 	}
-
-	var vc ColorVertices
-		
-	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
-	// TODO: Transport vertices to the GPU in bulk using glBufferData
-	//       Function calls here appear to be the biggest bottleneck
-	for pos := start; pos < min(start + N, int64(len(data.access))); pos++ {
-		if pos < 0 { continue }
-		
-		r := &data.access[pos]
-		page := r.Addr / *PAGE_SIZE
-		if _, present := data.quiet_pages[r.Addr / *PAGE_SIZE]; present {
-			continue
-		}
-		
-		x := float32(r.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
-		x = (x - 0.5) * 4
-		x *= margin_factor
-		y := -2 + 4*float32(pos - start) / float32(N)
-		
-		c := Color{uint8(r.IsWrite)*255, uint8(1-r.IsWrite)*255, 0, 255}
-		
-		vc.Add(ColorVertex{c, Vertex{x, y}})
-		vc.Add(ColorVertex{c, Vertex{x, y + 0.0125}})
-		
-		if pos > (start + N) - N / 20 {
-			vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
-			vc.Add(ColorVertex{c, Vertex{x, 2}})
-		}
-	}
 	
-	vc.Draw()
+	gl.LineWidth(1)
+
+	if cap(data.vertex_data) == 0 {
+		log.Print("start = ", start)
+		data.vertex_data = make([]*ColorVertices, 1)
+		data.vertex_data[0] = data.GetAccessVertexData(0, int64(data.nrecords))
+	}
+	gl.PushMatrix()
+	gl.Translated(0, -4 * float64(start) / float64(N), 0) //*nback), 0)
+	//data.vertex_data[0].Draw()
+	data.vertex_data[0].DrawPartial(2 * (start - *nback), 2 * *nback)
+	gl.PopMatrix()
+	OpenGLSentinel()
+	
+	NV := int64(len(*data.vertex_data[0]))
 	
 	var eolmarker ColorVertices
 	
-	// Draw end-of-data marker
-	if start + N > int64(len(data.access)) {
-		y := -2 + 4*float32(int64(len(data.access)) - start) / float32(N)
+	// End-of-data marker
+	if start + N > NV {
+		y := -2 + 4*float32(NV - start) / float32(*nback)
 		c := Color{255, 255, 255, 255}
 		eolmarker.Add(ColorVertex{c, Vertex{-2, y}})
 		eolmarker.Add(ColorVertex{c, Vertex{ 2, y}})
 	}
-	gl.LineWidth(10)
+	
+	OpenGLSentinel()
+	
+	gl.LineWidth(1)
 	eolmarker.Draw()
 	
-	return start > int64(len(data.access))
+	return start > NV //int64(data.nrecords)
 }
 
+func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
+
+	width := uint64(len(data.active_pages)) * *PAGE_SIZE
+	
+	vc := &ColorVertices{}
+		
+	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
+	// TODO: Transport vertices to the GPU in bulk using glBufferData
+	//	   Function calls here appear to be the biggest bottleneck
+	for pos := start; pos < min(start + N, int64(data.nrecords)); pos++ {
+		if pos < 0 { continue }
+		
+		r := &data.records[pos]
+		if r.Type == MEMA_ACCESS {	
+			// take it
+		} else if r.Type == MEMA_FUNC_ENTER {
+			continue
+			y := -2 + 4 * float32(pos - start) / float32(*nback)
+			
+			c := Color{64, 64, 255, 255}
+			vc.Add(ColorVertex{c, Vertex{-2, y}})
+			vc.Add(ColorVertex{c, Vertex{ 2, y}})
+			continue
+			
+		} else if r.Type == MEMA_FUNC_EXIT {
+			continue
+			y := -2 + 4 * float32(pos - start) / float32(*nback)
+			
+			c := Color{255, 64, 64, 255}
+			vc.Add(ColorVertex{c, Vertex{-2, y}})
+			vc.Add(ColorVertex{c, Vertex{ 2, y}})
+			continue
+		} else {
+			log.Panic()
+		}
+		a := r.MemAccess()
+		
+		page := a.Addr / *PAGE_SIZE
+		if _, present := data.quiet_pages[page]; present {
+			//continue
+		}
+		
+		x := float32(a.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
+		x = (x - 0.5) * 4
+		
+		if x > 4 || x < -4 {
+			log.Panic("x has unexpected value: ", x)
+		}
+		
+		y := -2 + 4 * float32(int64(len(*vc)) - start) / float32(*nback)
+		
+		c := Color{uint8(a.IsWrite)*255, uint8(1-a.IsWrite)*255, 0, 255}
+		
+		vc.Add(ColorVertex{c, Vertex{x, y}})
+		vc.Add(ColorVertex{c, Vertex{x, y + 0.0125}})
+		
+		/*
+		if pos > (start + N) - N / 20 {
+			vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
+			vc.Add(ColorVertex{c, Vertex{x, 2}})
+		}
+		*/
+	}
+	
+	return vc
+}
