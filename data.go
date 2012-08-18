@@ -22,7 +22,8 @@ const (
 )
 
 type Record struct {
-	Type, Magic int64
+	Type int64
+	// Magic int64
 	Content [48]byte // union { MemAccess, FunctionCall }
 }
 
@@ -52,12 +53,16 @@ func (records *Records) FromBytes(bslice []byte) {
 func (r Record) String() string {
 	if r.Type == MEMA_ACCESS {
 		a := r.MemAccess()
-		return fmt.Sprintf("r=%d/%x MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
-			r.Type, r.Magic, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+		//return fmt.Sprintf("r=%d/%x MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
+			//r.Type, r.Magic, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
+		return fmt.Sprintf("r=%d MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
+			r.Type, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
 	}
 	f := r.FunctionCall()
-	return fmt.Sprintf("r=%d/%x FunctionCall{ptr=0x%x}",
-		r.Type, r.Magic, f.FuncPointer)
+	//return fmt.Sprintf("r=%d/%x FunctionCall{ptr=0x%x}",
+		//r.Type, r.Magic, f.FuncPointer)
+	return fmt.Sprintf("r=%d FunctionCall{ptr=0x%x}",
+		r.Type, f.FuncPointer)
 }
 
 type FunctionCall struct {
