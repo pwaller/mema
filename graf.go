@@ -189,8 +189,8 @@ func MakeProgram() gl.Program {
 		#version 120
 		// 440 compatibility
 		
-		in vec4 vertexcolor;
-		varying out vec4 outputColor;
+		//in vec4 vertexcolor;
+		//varying out vec4 outputColor;
 		
 		void main() {
 			//gl_FragColor = gl_Color; //vertexcolor;
@@ -216,13 +216,13 @@ func MakeProgram() gl.Program {
 	
 	linkstat := prog.Get(gl.LINK_STATUS)
 	if linkstat != 1 {
-	    log.Panic("Program link failed, status=", linkstat,
+		log.Panic("Program link failed, status=", linkstat,
 				  "Info log: ", prog.GetInfoLog())
-    }
+	}
 	
 	prog.Validate()
 	valstat := prog.Get(gl.VALIDATE_STATUS)
 	if valstat != 1 { log.Panic("Program validation failed: ", valstat) }
 	
-    return prog
+	return prog
 }
