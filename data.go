@@ -351,7 +351,7 @@ func (data *ProgramData) Draw(start, N int64) bool {
 	gl.PushMatrix()
 	gl.Translated(0, -4 * float64(start) / float64(N), 0) //*nback), 0)
 	//data.vertex_data[0].Draw()
-	data.vertex_data[0].DrawPartial(2 * (start - *nback), 2 * *nback)
+	data.vertex_data[0].DrawPartial(start, *nback)
 	gl.PopMatrix()
 	OpenGLSentinel()
 	
