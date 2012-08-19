@@ -55,6 +55,17 @@ func main_loop(data *ProgramData) {
 	
 	text := MakeText("Hello, world", 32.)
 	
+	glfw.SetMouseWheelCallback(func(pos int) {
+		// return
+		// TODO: make this work
+		if pos > 0 {
+			*nback = 40*1024 << uint(pos)
+		} else {
+			*nback = 40*1024 >> uint(-pos)
+		}
+		log.Print("Mousewheel position: ", pos, " nback: ", *nback)
+	})
+	
 	done := false
 	for !done {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
