@@ -243,7 +243,7 @@ func (d ProgramData) RegionID(addr uint64) int {
 func (d *ProgramData) ActiveRegionIDs() []int {
 	// TODO: Quite a bite of this wants to be moved into NewProgramData
 	active := make(map[int] bool)
-	page_activity := make(map[uint64] int)
+	page_activity := make(map[uint64] uint)
 	
 	for i := range d.records {
 		r := &d.records[i]
@@ -262,7 +262,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	sort.Ints(result)
 	
 	// Figure out how much activity the busiest page has
-	highest_page_activity := 0
+	var highest_page_activity uint = 0
 	for _, value := range page_activity {
 		if value > highest_page_activity {
 			highest_page_activity = value
@@ -277,7 +277,8 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	// Populate the "quiet pages" map (less than 1% of the activity of the 
 	// most active page)
 	for page, value := range page_activity {
-		if false && value < highest_page_activity / 1000 {
+		if *hide_qp_fraction != 0 &&
+		   value < highest_page_activity / *hide_qp_fraction {
 			d.quiet_pages[page] = true
 			continue
 		}
@@ -419,7 +420,7 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 		
 		page := a.Addr / *PAGE_SIZE
 		if _, present := data.quiet_pages[page]; present {
-			//continue
+			continue
 		}
 		
 		x := float32(a.Addr - data.n_inactive_to_left[page] * *PAGE_SIZE) / float32(width)
