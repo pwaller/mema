@@ -47,7 +47,7 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 	
 	
 	if i+N > int64(len(vcs)) {
-		log.Panic("Too many: ", N, " ", i+N, " ", len(vcs))
+		N = int64(len(vcs)) - i
 	}
 	
 	gl.PushClientAttrib(0xFFFFFFFF) //gl.CLIENT_ALL_ATTRIB_BITS)
