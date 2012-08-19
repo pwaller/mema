@@ -348,9 +348,14 @@ func (data *ProgramData) Draw(start, N int64) bool {
 		data.vertex_data = make([]*ColorVertices, 1)
 		data.vertex_data[0] = data.GetAccessVertexData(0, int64(data.nrecords))
 	}
+	
 	gl.PushMatrix()
-	gl.Translated(0, -4 * float64(start) / float64(N), 0) //*nback), 0)
-	//data.vertex_data[0].Draw()
+	
+	gl.Translated(0, -2, 0)
+	gl.Scaled(1, 4 / float64(*nback), 1)
+	gl.Translated(0, -float64(start), 0)
+	OpenGLSentinel()
+	
 	data.vertex_data[0].DrawPartial(start, *nback)
 	gl.PopMatrix()
 	OpenGLSentinel()
@@ -424,12 +429,12 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 			log.Panic("x has unexpected value: ", x)
 		}
 		
-		y := -2 + 4 * float32(int64(len(*vc)) - start) / float32(*nback)
+		y := float32(int64(len(*vc)) - start)
 		
 		c := Color{uint8(a.IsWrite)*255, uint8(1-a.IsWrite)*255, 0, 255}
 		
 		vc.Add(ColorVertex{c, Vertex{x, y}})
-		vc.Add(ColorVertex{c, Vertex{x, y + 0.0125}})
+		vc.Add(ColorVertex{c, Vertex{x, y + 100}})
 		
 		/*
 		if pos > (start + N) - N / 20 {
