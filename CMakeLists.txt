@@ -21,3 +21,5 @@ add_library(memartl SHARED
 )
 
 add_subdirectory(LLVMMema)
+
+configure_file(envrc.in envrc @ONLY)
