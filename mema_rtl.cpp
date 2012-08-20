@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -15,7 +16,6 @@
 #include <unistd.h>
 
 #include "lz4.h"
-#include "test.pb.h"
 
 typedef int64_t uptr;
 
@@ -237,77 +237,17 @@ void __mema_empty_buffer() {
   next_free_mem_access = &mem_accesses[0];
 }
 
-#if 0
-
-extern "C" NOINLINE INTERFACE_ATTRIBUTE
-void __asan_mema_function_entry(const char* name) {
-  //Report("Entering function %s\n", name);
-  
-  MemAccess & f = *(next_free_mem_access++);
-  f.type = MEMA_FUNC_ENTER;
-  strncpy(f.func_name, name, sizeof(f.func_name));
-  f.func_name[sizeof(f.func_name)-1] = '\0';
-  //Report("Entering function: '%s' '%s'\n", name, f.func_name);
-  
-  // Round-robbin buffer
-  if (next_free_mem_access == last_free_mem_access)
-      __asan_memaccess_empty_buffer();
-}
-
-extern "C" NOINLINE INTERFACE_ATTRIBUTE
-void __asan_mema_function_exit(const char* name) {
-  //Report("Exiting function %s\n", name);  
-  
-  MemAccess & f = *(next_free_mem_access++);
-  f.type = MEMA_FUNC_EXIT;
-  strncpy(f.func_name, name, sizeof(f.func_name));
-  
-  // Round-robbin buffer
-  if (next_free_mem_access == last_free_mem_access)
-      __asan_memaccess_empty_buffer();
-}
-
-void __asan_memaccess_initialize() {
-  if (!flags()->memaccess_filename) {
-    Report("memaccess_filename not set\n");
-    return;
-  }
-  memaccess_fd = open(flags()->memaccess_filename, true);
-  
-  write(memaccess_fd, "MEMACCES", 8); // magic bytes
-  
-  Report("Will write memaccess data to %s..\n", flags()->memaccess_filename);
-  
-  int maps_fd = open("/proc/self/maps", false);
-  int bytes_read = 0;
-  
-  char buf[4096] = {0};
-  
-  do {
-    bytes_read = read(maps_fd, buf, sizeof(buf));
-    if (bytes_read > 0)
-      write(memaccess_fd, buf, bytes_read);    
-  } while (bytes_read > 0);  
-  
-  write(memaccess_fd, "\0", 1);    
-}
-
-void __asan_memaccess_finalize() {
-    __asan_memaccess_empty_buffer();
-    close(memaccess_fd);
-    Report("memaccess: Finishing..\n");
-}
-#endif
-
 extern "C" {
 
-void __mema_function_entry(uptr addr, const char* name) {
+void __mema_function_entry(uptr addr) {
   if (flags()->disable) return;
   
-  //std::cout << "Entering function " << name << " @ " << addr << std::endl;
+  GET_CALLER_PC_BP_SP;
+  
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_FUNC_ENTER;
-  f.func.addr = addr;
+  f.acc.pc = pc; f.acc.bp = bp; f.acc.sp = sp;
+  f.acc.addr = addr;
   
   // Round-robbin buffer
   if (next_free_mem_access == last_free_mem_access) {
@@ -315,10 +255,11 @@ void __mema_function_entry(uptr addr, const char* name) {
   }
 }
 
-void __mema_function_exit(uptr addr, const char* name) {
+void __mema_function_exit(uptr addr) {
   if (flags()->disable) return;
   
-    //std::cout << "Exiting function " << name << std::endl;
+  GET_CALLER_PC_BP_SP;
+  
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_FUNC_EXIT;
   f.func.addr = addr;
@@ -332,7 +273,7 @@ void __mema_function_exit(uptr addr, const char* name) {
 void __mema_enable()  { if (flags()->verbosity) printf("__mema_enable()\n");  flags()->disable = false; }
 void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); flags()->disable = true ; }
 
-void __mema_access(void* addr, char size, bool is_write) {
+void __mema_access(uptr addr, char size, bool is_write) {
   if (flags()->disable) return;
   // TODO: Size?
   GET_CALLER_PC_BP_SP;
@@ -340,25 +281,18 @@ void __mema_access(void* addr, char size, bool is_write) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   if (flags()->disable || !flags()->filename) return;
-#if 0
-  // Old way
-  double time = tv.tv_sec + (0.000001 * tv.tv_usec);
-  printf("%f %p %p %p %p %d\n", time, pc, bp, sp, addr, is_write);
-#else
+  
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_ACCESS;
   f.acc.time = tv.tv_sec + (0.000001 * tv.tv_usec);
   f.acc.pc = pc; f.acc.bp = bp; f.acc.sp = sp;
-  f.acc.addr = (uptr)addr;
+  f.acc.addr = addr;
   f.acc.is_write = is_write;
   
   // Round-robbin buffer
   if (next_free_mem_access == last_free_mem_access) {
     __mema_empty_buffer();
   }
-#endif
-    //std::cout << "  Memory write=" << write << " of size "
-              //<< int(size) << " at " << addr << std::endl;
 }
 
 

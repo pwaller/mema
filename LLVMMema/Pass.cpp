@@ -130,35 +130,26 @@ namespace {
     bool handleFunction(Module &M, Function &F) {
       if (&F == AsanCtorFunction) return false;
     
-      errs() << "Handling function: ";
-      errs().write_escaped(F.getName()) << '\n';
+      // errs() << "Handling function: ";
+      // errs().write_escaped(F.getName()) << '\n';
       
       // Instrument function calls
       IRBuilder<> myIRB(F.begin()->getFirstNonPHI());
       
-      int     status;
-      char   *realname;
-      realname = abi::__cxa_demangle(F.getName().data(), 0, 0, &status);
-      StringRef realname_str(realname ? realname : F.getName().data());
-      free(realname);
-      
-      Value *FuncNameAddr = myIRB.CreatePointerCast(
-        myIRB.CreateGlobalStringPtr(realname_str), IntptrTy);
-      
       Function * func_entry = cast<Function>(
-        M.getOrInsertFunction("__mema_function_entry", myIRB.getVoidTy(), IntptrTy, IntptrTy, NULL)),
+        M.getOrInsertFunction("__mema_function_entry", myIRB.getVoidTy(), IntptrTy, NULL)),
                * func_exit  = cast<Function>(
-        M.getOrInsertFunction("__mema_function_exit",  myIRB.getVoidTy(), IntptrTy, IntptrTy, NULL));
+        M.getOrInsertFunction("__mema_function_exit",  myIRB.getVoidTy(), IntptrTy, NULL));
       
       // Instrument function entry
-      myIRB.CreateCall2(func_entry, myIRB.CreatePointerCast(&F, IntptrTy), FuncNameAddr);
+      myIRB.CreateCall(func_entry, myIRB.CreatePointerCast(&F, IntptrTy));
       
       /// Instrument function returns
       for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ++FI) {
         for (BasicBlock::iterator BI = FI->begin(), BE = FI->end(); BI != BE; ++BI) {
           if (!isa<ReturnInst>(BI)) continue;
           IRBuilder<> irb(BI);
-          irb.CreateCall2(func_exit, myIRB.CreatePointerCast(&F, IntptrTy), FuncNameAddr);
+          irb.CreateCall(func_exit, myIRB.CreatePointerCast(&F, IntptrTy));
         }
       }
       
