@@ -35,6 +35,33 @@ var hide_qp_fraction = flag.Uint("hide-qp-fraction", 0,
 
 var margin_factor = float32(1) //0.975)
 
+func debug_coords() {
+	// TODO: Move matrix hackery somewhere else
+	gl.MatrixMode(gl.PROJECTION)
+	gl.PushMatrix()
+	//gl.LoadIdentity()
+	//gl.Ortho(-2.1, 6.1, -4, 8, 1, -1)
+	gl.MatrixMode(gl.MODELVIEW)
+	gl.PushMatrix()
+	gl.LoadIdentity()
+	
+	
+	gl.LoadIdentity()
+	gl.LineWidth(5)
+	gl.Color4f(1, 1, 0, 1)
+	gl.Begin(gl.LINES)
+	gl.Vertex2d(0, -1.6)
+	gl.Vertex2d(0,  0.8)
+	gl.Vertex2d(-0.8, 0)
+	gl.Vertex2d( 0.8, 0)
+	gl.End()
+	gl.PopMatrix()
+	
+	gl.MatrixMode(gl.PROJECTION)
+	gl.PopMatrix()
+	gl.MatrixMode(gl.MODELVIEW)
+}
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
@@ -99,7 +126,7 @@ func main_loop(data *ProgramData) {
  	MouseToProj := func(x, y int) (float64, float64) {
 		
 		var projmat, modelmat [16]float64
-		var view [4]int32
+		var viewport [4]int32
 		
 		gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
 		gl.PushMatrix()
@@ -107,10 +134,12 @@ func main_loop(data *ProgramData) {
 		gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
 		gl.PopMatrix()
 		
-		gl.GetIntegerv(gl.VIEWPORT, view[0:3])
+		gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
+		// Need to convert so that y is at lower left
+		y = int(viewport[3]) - y
 		
 		px, py, _ := glu.UnProject(float64(x), float64(y), 0,
-			&modelmat, &projmat, &view)
+			&modelmat, &projmat, &viewport)
 	   
 		return px, py
 	}
@@ -149,11 +178,11 @@ func main_loop(data *ProgramData) {
 		
 		px, py := MouseToProj(x, y)
 		// Record index
-		rec = int64((-py + 2.) * float64(*nback) / 4.)
+		rec = int64((py + 2) * float64(*nback) / 4. + 0.5)
 		rec_actual = rec + i
 		
 		dpy := py - mousepy
-		di := int64(dpy * float64(*nback) / 4.)
+		di := int64(-dpy * float64(*nback) / 4.)
 		
 		if lbutton {
 			i += di
@@ -162,7 +191,8 @@ func main_loop(data *ProgramData) {
 		mousepx, mousepy = px, py
 		mousex, mousey = x, y
 		
-		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%f", x, y, px, py, rec, rec_actual, dpy, di)
+		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%d",
+			//x, y, px, py, rec, rec_actual, dpy, di)
 		
 		if rec_actual > 0 && rec_actual < data.nrecords {
 			log.Print(data.records[rec_actual])
