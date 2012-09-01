@@ -227,7 +227,7 @@ func main_loop(data *ProgramData) {
 		gl.PointSize(5)
 		gl.Begin(gl.POINTS)
 		gl.Color4f(1, 1, 1, 1)
-		gl.Vertex3f(0, 0, 0)
+		gl.Vertex3d(mousepx, 0, 0)
 		gl.End()
 		gl.PopMatrix()
 		
