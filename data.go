@@ -90,7 +90,12 @@ type MemRegion struct {
 	perms, offset, dev, inode, pathname string
 }
 
+func (r *MemRegion) String() string {
+	return fmt.Sprintf("%x-%x %s", r.low, r.hi, r.pathname)
+}
+
 type ProgramData struct {
+	filename string
 	region []MemRegion
 	access []MemAccess
 	records Records
@@ -102,8 +107,18 @@ type ProgramData struct {
 	vertex_data []*ColorVertices
 }
 
+func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
+	for i := range data.region {
+		r := &data.region[i]
+		if r.low <= addr && addr < r.hi { return r }
+	}
+	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
+}
+
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
+	
+	data.filename = filename
 	
 	fd, err := os.Open(filename)
 	defer fd.Close()
