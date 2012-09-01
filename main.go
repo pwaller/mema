@@ -10,6 +10,7 @@ import (
 	"time"
 	
 	"github.com/banthar/gl"
+	"github.com/banthar/glu"
 	"github.com/jteeuwen/glfw"
 )
 
@@ -56,16 +57,98 @@ func main_loop(data *ProgramData) {
 	var i int64 = -int64(*nback)
 	
 	text := MakeText("Hello, world", 32.)
+	// Location of mouse in record space
+	var rec, rec_actual int64 = 0, 0
+	
+	var mousex, mousey, mousedownx, mousedowny int
+	var mousepx, mousepy float64
+	var lbutton bool
+	
 	
 	glfw.SetMouseWheelCallback(func(pos int) {
 		// return
 		// TODO: make this work
-		if pos > 0 {
-			*nback = 40*1024 << uint(pos)
+		nback_prev := *nback
+		if pos < 0 {
+			*nback = 40*1024 << uint(-pos)
 		} else {
-			*nback = 40*1024 >> uint(-pos)
+			*nback = 40*1024 >> uint(pos)
 		}
 		log.Print("Mousewheel position: ", pos, " nback: ", *nback)
+		
+		if rec == 0 { return }
+		
+		// mouse cursor is at screen "rec_actual", and it should be after
+		// the transformation
+		
+		// We need to adjust `i` to keep this value constant:
+		// rec_actual == i + int64(constpart * float64(*nback))
+		//   where constpart <- (-const + 2.) / 4.
+		// (that way, the mouse is still pointing at the same place after scaling)
+		
+		constpart := float64(rec_actual - i) / float64(nback_prev)
+		
+		rec_actual_after := i + int64(constpart * float64(*nback))
+		delta := rec_actual_after - rec_actual
+		i -= delta
+	})
+	
+ 	MouseToProj := func(x, y int) (float64, float64) {
+		
+		var projmat, modelmat [16]float64
+		var view [4]int32
+		
+		gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
+		gl.PushMatrix()
+		gl.LoadIdentity()
+		gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
+		gl.PopMatrix()
+		
+		gl.GetIntegerv(gl.VIEWPORT, view[0:3])
+		
+		px, py, _ := glu.UnProject(float64(x), float64(y), 0,
+					   &modelmat, &projmat, &view)
+	   
+		return px, py
+	}
+	
+	glfw.SetMouseButtonCallback(func(button, action int) {
+		switch button {
+		case glfw.Mouse1:
+			switch action {
+			case glfw.KeyPress:
+				mousedownx, mousedowny = mousex, mousey
+				lbutton = true
+			case glfw.KeyRelease:
+				lbutton = false
+			}
+		}
+	})
+	
+	
+	glfw.SetMousePosCallback(func(x, y int) {
+		
+		px, py := MouseToProj(x, y)
+		// Record index
+		rec = int64((-py + 2.) * float64(*nback) / 4.)
+		rec_actual = rec + i
+		
+		dpy := py - mousepy
+		di := int64(dpy * float64(*nback) / 4.)
+		
+		if lbutton {
+			i += di
+		}
+		
+		mousepx, mousepy = px, py
+		mousex, mousey = x, y
+		
+		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%f", x, y, px, py, rec, rec_actual, dpy, di)
+		
+		if rec_actual > 0 && rec_actual < data.nrecords {
+			log.Print(data.records[rec_actual])
+		}
+		
 	})
 	
 	done := false
