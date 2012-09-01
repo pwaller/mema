@@ -7,6 +7,7 @@ import (
 	
 	"github.com/jteeuwen/glfw"
 	"github.com/banthar/gl"
+	"github.com/banthar/glu"
 )
 
 
@@ -110,6 +111,26 @@ func make_window(w, h int, title string) func() {
 		glfw.CloseWindow()
 		log.Print("Cleanup")
 	}
+}
+
+func MouseToProj(x, y int) (float64, float64) {
+	var projmat, modelmat [16]float64
+	var viewport [4]int32
+	
+	gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
+	gl.PushMatrix()
+	gl.LoadIdentity()
+	gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
+	gl.PopMatrix()
+	
+	gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
+	// Need to convert so that y is at lower left
+	y = int(viewport[3]) - y
+	
+	px, py, _ := glu.UnProject(float64(x), float64(y), 0,
+		&modelmat, &projmat, &viewport)
+   
+	return px, py
 }
 
 func Reshape(width, height int) {
@@ -226,4 +247,31 @@ func MakeProgram() gl.Program {
 	if valstat != 1 { log.Panic("Program validation failed: ", valstat) }
 	
 	return prog
+}
+
+func debug_coords() {
+	// TODO: Move matrix hackery somewhere else
+	gl.MatrixMode(gl.PROJECTION)
+	gl.PushMatrix()
+	//gl.LoadIdentity()
+	//gl.Ortho(-2.1, 6.1, -4, 8, 1, -1)
+	gl.MatrixMode(gl.MODELVIEW)
+	gl.PushMatrix()
+	gl.LoadIdentity()
+	
+	
+	gl.LoadIdentity()
+	gl.LineWidth(5)
+	gl.Color4f(1, 1, 0, 1)
+	gl.Begin(gl.LINES)
+	gl.Vertex2d(0, -1.6)
+	gl.Vertex2d(0,  0.8)
+	gl.Vertex2d(-0.8, 0)
+	gl.Vertex2d( 0.8, 0)
+	gl.End()
+	gl.PopMatrix()
+	
+	gl.MatrixMode(gl.PROJECTION)
+	gl.PopMatrix()
+	gl.MatrixMode(gl.MODELVIEW)
 }

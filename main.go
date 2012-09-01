@@ -10,7 +10,6 @@ import (
 	"time"
 	
 	"github.com/banthar/gl"
-	"github.com/banthar/glu"
 	"github.com/jteeuwen/glfw"
 )
 
@@ -34,33 +33,6 @@ var hide_qp_fraction = flag.Uint("hide-qp-fraction", 0,
 	"If nonzero, pages with 'accesses < busiest / hqf' are ignored")
 
 var margin_factor = float32(1) //0.975)
-
-func debug_coords() {
-	// TODO: Move matrix hackery somewhere else
-	gl.MatrixMode(gl.PROJECTION)
-	gl.PushMatrix()
-	//gl.LoadIdentity()
-	//gl.Ortho(-2.1, 6.1, -4, 8, 1, -1)
-	gl.MatrixMode(gl.MODELVIEW)
-	gl.PushMatrix()
-	gl.LoadIdentity()
-	
-	
-	gl.LoadIdentity()
-	gl.LineWidth(5)
-	gl.Color4f(1, 1, 0, 1)
-	gl.Begin(gl.LINES)
-	gl.Vertex2d(0, -1.6)
-	gl.Vertex2d(0,  0.8)
-	gl.Vertex2d(-0.8, 0)
-	gl.Vertex2d( 0.8, 0)
-	gl.End()
-	gl.PopMatrix()
-	
-	gl.MatrixMode(gl.PROJECTION)
-	gl.PopMatrix()
-	gl.MatrixMode(gl.MODELVIEW)
-}
 
 func main_loop(data *ProgramData) {
 	start := time.Now()
@@ -122,28 +94,7 @@ func main_loop(data *ProgramData) {
 		delta := rec_actual_after - rec_actual
 		i -= delta
 	})
-	
- 	MouseToProj := func(x, y int) (float64, float64) {
 		
-		var projmat, modelmat [16]float64
-		var viewport [4]int32
-		
-		gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
-		gl.PushMatrix()
-		gl.LoadIdentity()
-		gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
-		gl.PopMatrix()
-		
-		gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
-		// Need to convert so that y is at lower left
-		y = int(viewport[3]) - y
-		
-		px, py, _ := glu.UnProject(float64(x), float64(y), 0,
-			&modelmat, &projmat, &viewport)
-	   
-		return px, py
-	}
-	
 	var updated_this_frame bool = false
 	
 	update_stack := func() {
