@@ -120,7 +120,7 @@ func Reshape(width, height int) {
 	gl.MatrixMode(gl.PROJECTION)
 	gl.LoadIdentity()	
 	//gl.Frustum(-1.0, 1.0, -h, h, 5.0, 60.0)
-	gl.Ortho(-2.1, 2.1, -2.25, 2.1, -1, 1)
+	gl.Ortho(-2.1, 6.1, -2.25, 2.1, -1, 1)
 	
 	gl.MatrixMode(gl.MODELVIEW)
 	gl.LoadIdentity()

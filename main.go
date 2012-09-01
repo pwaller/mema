@@ -56,9 +56,12 @@ func main_loop(data *ProgramData) {
 		
 	var i int64 = -int64(*nback)
 	
-	text := MakeText("Hello, world", 32.)
+	text := MakeText(data.filename, 32)
+	
 	// Location of mouse in record space
 	var rec, rec_actual int64 = 0, 0
+	
+	var stacktext []*Text
 	
 	var mousex, mousey, mousedownx, mousedowny int
 	var mousepx, mousepy float64
@@ -107,9 +110,25 @@ func main_loop(data *ProgramData) {
 		gl.GetIntegerv(gl.VIEWPORT, view[0:3])
 		
 		px, py, _ := glu.UnProject(float64(x), float64(y), 0,
-					   &modelmat, &projmat, &view)
+			&modelmat, &projmat, &view)
 	   
 		return px, py
+	}
+	
+	var updated_this_frame bool = false
+	
+	update_stack := func() {
+		if updated_this_frame { return }
+		updated_this_frame = true
+		
+		for j := range stacktext {
+			stacktext[j].destroy()
+		}
+		stack := data.GetStackNames(rec_actual)
+		stacktext = make([]*Text, len(stack))
+		for j := range stack {
+			stacktext[j] = MakeText(stack[j], 32)
+		}
 	}
 	
 	glfw.SetMouseButtonCallback(func(button, action int) {
@@ -149,10 +168,13 @@ func main_loop(data *ProgramData) {
 			log.Print(data.records[rec_actual])
 		}
 		
+		update_stack()
 	})
 	
 	done := false
 	for !done {
+		updated_this_frame = false
+		
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		gl.LineWidth(1)
 		
@@ -189,6 +211,24 @@ func main_loop(data *ProgramData) {
 		gl.Color4f(1, 1, 1, 1)
 		gl.Enable(gl.TEXTURE_2D)
 		text.Draw(0, 0)
+		gl.Disable(gl.TEXTURE_2D)
+		gl.PopMatrix()
+		gl.MatrixMode(gl.MODELVIEW)
+		
+		
+		
+		// TODO: Move matrix hackery somewhere else
+		gl.MatrixMode(gl.PROJECTION)
+		gl.PushMatrix()
+		gl.LoadIdentity()
+		
+		// TODO: Use orthographic window co-ordinate space for font consistency?
+		gl.Ortho(0, 1280, 0, 768, -1, 1)
+		gl.Color4f(1, 1, 1, 1)
+		gl.Enable(gl.TEXTURE_2D)
+		for text_idx := range stacktext {
+			stacktext[text_idx].Draw(1280*0.5, 768 - 35 - text_idx*16) //100+text_idx*32)
+		}
 		gl.Disable(gl.TEXTURE_2D)
 		gl.PopMatrix()
 		gl.MatrixMode(gl.MODELVIEW)
