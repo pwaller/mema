@@ -166,6 +166,19 @@ func main_loop(data *ProgramData) {
 			i = -int64(*nback)
 		}
 		
+		
+		gl.PushMatrix()
+		gl.Translated(0, -2, 0)
+		gl.Scaled(1, 4 / float64(*nback), 1)
+		gl.Translated(0, float64(rec), 0)
+		
+		gl.PointSize(5)
+		gl.Begin(gl.POINTS)
+		gl.Color4f(1, 1, 1, 1)
+		gl.Vertex3f(0, 0, 0)
+		gl.End()
+		gl.PopMatrix()
+		
 		// TODO: Move matrix hackery somewhere else
 		gl.MatrixMode(gl.PROJECTION)
 		gl.PushMatrix()
