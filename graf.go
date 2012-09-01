@@ -55,7 +55,8 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 	
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
 	OpenGLSentinel()
-	gl.DrawArrays(gl.LINES, int(i), int(N))
+	gl.PointSize(2)
+	gl.DrawArrays(gl.POINTS, int(i), int(N))
 	defer func() {
 		if r := recover(); r != nil {
 			log.Print("i = ", i, " N = ", N)

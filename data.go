@@ -13,6 +13,7 @@ import (
 	"unsafe"
 	
 	"github.com/banthar/gl"
+	"github.com/toberndo/go-stree/stree"
 )
 
 const (
@@ -105,6 +106,7 @@ type ProgramData struct {
 	n_pages_to_left map[uint64] uint64
 	n_inactive_to_left map[uint64] uint64
 	vertex_data []*ColorVertices
+	stack_stree *stree.Tree
 }
 
 func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
@@ -134,6 +136,14 @@ func NewProgramData(filename string) *ProgramData {
 	// TODO: Stripe across the file to find where blocks are
 	// TODO: Load on demand sections which will be read
 	data.ParseBlocks(reader)
+	
+	// TODO: building the stree isn't going to work well with striping across file
+	log.Print("Loading stree..")
+	data.stack_stree = data.BuildStree()
+	log.Print("Loaded stree")
+
+	stack := (*data.stack_stree).Query(100, 100)
+	log.Print(" -- stree test:", stack)
 
 	log.Print("Read ", len(data.access), " records")
 	
@@ -403,6 +413,8 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//	   Function calls here appear to be the biggest bottleneck
+	var stack_depth int
+	
 	for pos := start; pos < min(start + N, int64(data.nrecords)); pos++ {
 		if pos < 0 { continue }
 		
@@ -410,21 +422,20 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 		if r.Type == MEMA_ACCESS {	
 			// take it
 		} else if r.Type == MEMA_FUNC_ENTER {
-			continue
-			y := -2 + 4 * float32(pos - start) / float32(*nback)
+			stack_depth++
 			
+			y := float32(int64(len(*vc)) - start)
 			c := Color{64, 64, 255, 255}
-			vc.Add(ColorVertex{c, Vertex{-2, y}})
-			vc.Add(ColorVertex{c, Vertex{ 2, y}})
-			continue
+			vc.Add(ColorVertex{c, Vertex{2.1 + float32(stack_depth) / 80., y}})
 			
+			continue
 		} else if r.Type == MEMA_FUNC_EXIT {
-			continue
-			y := -2 + 4 * float32(pos - start) / float32(*nback)
+			stack_depth--
 			
+			y := float32(int64(len(*vc)) - start)
 			c := Color{255, 64, 64, 255}
-			vc.Add(ColorVertex{c, Vertex{-2, y}})
-			vc.Add(ColorVertex{c, Vertex{ 2, y}})
+			vc.Add(ColorVertex{c, Vertex{2.1 + float32(stack_depth) / 80., y}})
+			
 			continue
 		} else {
 			log.Panic()
@@ -448,9 +459,9 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 		c := Color{uint8(a.IsWrite)*255, uint8(1-a.IsWrite)*255, 0, 255}
 		
 		vc.Add(ColorVertex{c, Vertex{x, y}})
-		vc.Add(ColorVertex{c, Vertex{x, y + 100}})
 		
 		/*
+		TODO: Reintroduce 'recently hit memory locations'
 		if pos > (start + N) - N / 20 {
 			vc.Add(ColorVertex{c, Vertex{x, 2 + 0.1}})
 			vc.Add(ColorVertex{c, Vertex{x, 2}})
