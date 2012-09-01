@@ -85,7 +85,6 @@ func (a MemAccess) String() string {
 		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
 }
 
-
 type MemRegion struct {
 	low, hi uint64
 	perms, offset, dev, inode, pathname string
@@ -231,14 +230,13 @@ func (data *ProgramData) ParseBlock(bslice []byte) {
 	}
 }
 
-func (d ProgramData) RegionID(addr uint64) int {
+func (d *ProgramData) RegionID(addr uint64) int {
 	for i := range d.region {
 		if d.region[i].low < addr && addr < d.region[i].hi { return i }
 	}
 	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
 	return len(d.region)
 }
-
 
 func (d *ProgramData) ActiveRegionIDs() []int {
 	// TODO: Quite a bite of this wants to be moved into NewProgramData

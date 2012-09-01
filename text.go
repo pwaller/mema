@@ -18,13 +18,13 @@ type Text struct {
 	id gl.Texture
 }
 
-func MakeText(str string, size float64) Text {
+func MakeText(str string, size float64) *Text {
 	defer OpenGLSentinel()()
 
-	var text Text
+	text := &Text{}
 	text.str = str
 
-    // TODO: Something if font doesn't exist
+	// TODO: Something if font doesn't exist
 	fontBytes, err := ioutil.ReadFile(FontFile)
 	if err != nil {
 		log.Panic(err)
@@ -42,9 +42,13 @@ func MakeText(str string, size float64) Text {
 	
 	pt := freetype.Pt(10, 10+int(c.PointToFix32(size)>>8))
 	s, err := c.DrawString(text.str, pt)
-    if err != nil { log.Panic("Error: ", err) }
+	if err != nil { log.Panic("Error: ", err) }
 	
 	text.w, text.h = int(s.X/256), int(s.Y/256)+10
+	
+	if text.w > 4096 {
+		text.w = 4096
+	}
 	
 	rgba := image.NewRGBA(image.Rect(0, 0, text.w, text.h))
 	draw.Draw(rgba, rgba.Bounds(), bg, image.ZP, draw.Src)
@@ -52,8 +56,8 @@ func MakeText(str string, size float64) Text {
 	c.SetDst(rgba)
 	c.SetSrc(fg)
 	
-    _, err = c.DrawString(text.str, pt)
-    if err != nil { log.Panic("Error: ", err) }
+	_, err = c.DrawString(text.str, pt)
+	if err != nil { log.Panic("Error: ", err) }
 
 	text.id = gl.GenTexture()
 	text.id.Bind(gl.TEXTURE_2D)
@@ -67,10 +71,15 @@ func MakeText(str string, size float64) Text {
 
 	if gl.GetError() != gl.NO_ERROR {
 		text.id.Delete()
-		log.Panic("Failed to load a texture, err = ", gl.GetError())
+		log.Panic("Failed to load a texture, err = ", gl.GetError(),
+				  " str = ", str, " w = ", text.w, " h = ", text.h)
 	}
 		
 	return text
+}
+
+func (text *Text) destroy() {
+	text.id.Delete()
 }
 
 func (text *Text) Draw(x, y int) {

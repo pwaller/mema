@@ -30,7 +30,7 @@ var MAGIC_IN_RECORD = flag.Bool("magic-in-record", false, "Records contain magic
 var PAGE_SIZE = flag.Uint64("page-size", 4096, "page-size")
 
 var hide_qp_fraction = flag.Uint("hide-qp-fraction", 0,
-    "If nonzero, pages with 'accesses < busiest / hqf' are ignored")
+	"If nonzero, pages with 'accesses < busiest / hqf' are ignored")
 
 var margin_factor = float32(1) //0.975)
 
@@ -87,6 +87,7 @@ func main_loop(data *ProgramData) {
 		gl.MatrixMode(gl.PROJECTION)
 		gl.PushMatrix()
 		gl.LoadIdentity()
+		
 		// TODO: Use orthographic window co-ordinate space for font consistency?
 		gl.Ortho(0, 400, 0, 400, -1, 1)
 		gl.Color4f(1, 1, 1, 1)
