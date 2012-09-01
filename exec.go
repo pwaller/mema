@@ -5,16 +5,24 @@ package main
 import (
 	"bytes"
 	"debug/elf"
+	"debug/dwarf"
 	"path/filepath"
 	"log"
 	"os"
+	"sort"
 	"strings"
+	
+	"github.com/toberndo/go-stree/stree"
 )
 
 type Binary struct {
 	pathname string
 	elf *elf.File
+	dwarf *dwarf.Data
 	symbolmap map[uint64] *elf.Symbol
+	// TODO: Extend this to care for multiple entries with the same "Lowpc" value
+	dwarf_entries map[uint64] *dwarf.Entry
+	dwarf_stree *stree.Tree
 }
 
 func exists(path string) bool {
@@ -67,7 +75,53 @@ func NewBinary(path string) *Binary {
 		if err != nil { log.Panic("Problem loading elf: ", err, " at ", debug_filename) }
 	}
 	
-	result := &Binary{path, file, make(map[uint64] *elf.Symbol)}
+	dw, err := file.DWARF()
+	if err != nil {
+		log.Printf("!! No DWARF for %q", path)
+		dw = nil
+	}
+	
+	tree := stree.NewTree()
+	result := &Binary{path, file, dw, make(map[uint64] *elf.Symbol),
+		make(map[uint64] *dwarf.Entry), &tree}
+	
+	if true {
+		//tree := result.dwarf_stree
+		dwarf_entries := &result.dwarf_entries
+		
+		
+		dr := dw.Reader()
+		//log.Panic("Abort ", path, dwarf)
+		i := 0
+		n := 0
+		for {
+			i++
+			//if i > 1000 { break }
+			entry, err := dr.Next()
+			if err != nil { log.Panic("Error reading dwarf: ", entry) }
+			//log.Print("Got dwarf entry: ", entry)
+			if entry == nil { break }
+	
+			lpc := entry.Val(dwarf.AttrLowpc)
+			hpc := entry.Val(dwarf.AttrHighpc)
+			if hpc != nil && lpc != nil {
+				var hpcv, lpcv uint64
+				hpcv = hpc.(uint64)
+				lpcv = lpc.(uint64)
+				
+				tree.Push(int(lpcv), int(hpcv))
+				(*dwarf_entries)[lpcv] = entry
+				
+				//log.Print("Got one: ", lpcv, hpcv, entry)
+				n++
+			}
+		}
+		log.Print("Building dwarf tree..")
+		tree.BuildTree()
+		log.Print("dwarf tree built.")
+
+		//log.Panic("Abort, got ", n)
+	}
 	
 	virtoffset := uint64(0)
 	
@@ -113,6 +167,11 @@ func (r *MemRegion) GetBinary() *Binary {
 	return binary
 }
 
+func (data *ProgramData) GetSymbol(addr uint64) string {
+	region := data.GetRegion(addr)
+	return region.GetSymbol(addr)
+}
+
 func (r *MemRegion) GetSymbol(addr uint64) string {
 	binary := r.GetBinary()
 	if binary == nil { return "nil" }
@@ -122,4 +181,34 @@ func (r *MemRegion) GetSymbol(addr uint64) string {
 		return "unk"
 	}
 	return demangle(sym.Name)
+}
+
+func (d *ProgramData) GetDwarf(addr uint64) []*dwarf.Entry {
+	r := d.GetRegion(addr)
+	return r.GetDwarf(addr)
+}
+
+func (r *MemRegion) GetDwarf(addr uint64) []*dwarf.Entry {
+	binary := r.GetBinary()
+	if binary == nil { return make([]*dwarf.Entry, 0) }
+	
+	addr = addr - r.low
+	
+	intervals := (*binary.dwarf_stree).Query(int(addr), int(addr))
+	log.Print("Query: n=", len(intervals), addr, int(addr))
+	
+	lower_bounds := make([]int, len(intervals))
+	for i := range intervals {
+		lower_bounds[i] = intervals[i].Segment.From
+	}
+	sort.Ints(lower_bounds)
+	
+	dwarf_entries := make([]*dwarf.Entry, len(intervals))
+	
+	for i := range lower_bounds {
+		e := binary.dwarf_entries[uint64(lower_bounds[i])]
+		dwarf_entries[i] = e
+	}
+	
+	return dwarf_entries
 }

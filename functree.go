@@ -55,8 +55,7 @@ func (d *ProgramData) GetStackNames(record int64) []string {
 	result := make([]string, len(stack))
 	for i := range stack {
 		f := stack[i].FunctionCall()
-		region := d.GetRegion(f.FuncPointer)
-		result[i] = region.GetSymbol(f.FuncPointer)
+		result[i] = d.GetSymbol(f.FuncPointer)
 	}
 	return result
 }

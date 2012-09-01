@@ -1,8 +1,10 @@
 package main
 
 import (
+	//"debug/dwarf"
 	
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -64,6 +66,7 @@ func main_loop(data *ProgramData) {
 	var rec, rec_actual int64 = 0, 0
 	
 	var stacktext []*Text
+	var dwarftext []*Text
 	var recordtext *Text = nil
 	
 	var mousex, mousey, mousedownx, mousedowny int
@@ -123,8 +126,32 @@ func main_loop(data *ProgramData) {
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
 				
+				
 				if rec_actual > 0 && rec_actual < data.nrecords {
-					log.Print(data.records[rec_actual])
+					r := data.records[rec_actual]
+					
+					if r.Type == MEMA_ACCESS {
+						log.Print(r)
+						ma := r.MemAccess()
+						dwarf := data.GetDwarf(ma.Pc)
+						log.Print("Can has dwarf? ", len(dwarf))
+						for i := range dwarf {
+							log.Print("  ", dwarf[i])
+							//recordtext = MakeText(data.records[rec_actual].String(), 32)
+							
+						}
+						log.Print("")
+						
+						
+						for j := range dwarftext {
+							dwarftext[j].destroy()
+						}
+						dwarftext = make([]*Text, len(dwarf))
+						for j := range dwarf {
+							dwarftext[j] = MakeText(fmt.Sprintf("%q", dwarf[j]), 32)
+						}
+					}
+					
 					//recordtext = MakeText(data.records[rec_actual].String(), 32)
 				}
 				
@@ -200,6 +227,9 @@ func main_loop(data *ProgramData) {
 		text.Draw(0, 0)
 		for text_idx := range stacktext {
 			stacktext[text_idx].Draw(int(w*0.55), int(h) - 35 - text_idx*16)
+		}
+		for text_idx := range dwarftext {
+			dwarftext[text_idx].Draw(int(w*0.55), 35 + text_idx*16)
 		}
 		if recordtext != nil {
 			recordtext.Draw(int(w*0.55), 35)
