@@ -34,6 +34,9 @@ var hide_qp_fraction = flag.Uint("hide-qp-fraction", 0,
 
 var margin_factor = float32(1) //0.975)
 
+// Redraw
+var Draw func() = nil
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
@@ -124,7 +127,6 @@ func main_loop(data *ProgramData) {
 		}
 	})
 	
-	
 	glfw.SetMousePosCallback(func(x, y int) {
 		
 		px, py := MouseToProj(x, y)
@@ -152,23 +154,15 @@ func main_loop(data *ProgramData) {
 		update_stack()
 	})
 	
-	done := false
-	for !done {
-		updated_this_frame = false
-		
+	Draw = func() {
+	
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		gl.LineWidth(1)
-		
-		// TODO: Ability to modify *nfram and *nback at runtiem
-		//		 (i.e, pause and zoom functionality)
-		i += *nfram
-
 		N := *nback
 		wrapped := data.Draw(i, N)
 		if wrapped {
 			i = -int64(*nback)
 		}
-		
 		
 		gl.PushMatrix()
 		gl.Translated(0, -2, 0)
@@ -187,35 +181,32 @@ func main_loop(data *ProgramData) {
 		gl.PushMatrix()
 		gl.LoadIdentity()
 		
-		// TODO: Use orthographic window co-ordinate space for font consistency?
-		gl.Ortho(0, 400, 0, 400, -1, 1)
+		w, h := GetViewportWH()
+		gl.Ortho(0, w, 0, h, -1, 1)
 		gl.Color4f(1, 1, 1, 1)
 		gl.Enable(gl.TEXTURE_2D)
 		text.Draw(0, 0)
-		gl.Disable(gl.TEXTURE_2D)
-		gl.PopMatrix()
-		gl.MatrixMode(gl.MODELVIEW)
-		
-		
-		
-		// TODO: Move matrix hackery somewhere else
-		gl.MatrixMode(gl.PROJECTION)
-		gl.PushMatrix()
-		gl.LoadIdentity()
-		
-		// TODO: Use orthographic window co-ordinate space for font consistency?
-		gl.Ortho(0, 1280, 0, 768, -1, 1)
-		gl.Color4f(1, 1, 1, 1)
-		gl.Enable(gl.TEXTURE_2D)
 		for text_idx := range stacktext {
-			stacktext[text_idx].Draw(1280*0.5, 768 - 35 - text_idx*16) //100+text_idx*32)
+			stacktext[text_idx].Draw(int(w*0.55), int(h) - 35 - text_idx*16)
 		}
 		gl.Disable(gl.TEXTURE_2D)
+		
 		gl.PopMatrix()
 		gl.MatrixMode(gl.MODELVIEW)
 		
 		OpenGLSentinel()
 		glfw.SwapBuffers()
+	}
+	
+	done := false
+	for !done {
+		updated_this_frame = false
+		
+		// TODO: Ability to modify *nfram and *nback at runtiem
+		//		 (i.e, pause and zoom functionality)
+		i += *nfram
+		
+		Draw()
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1

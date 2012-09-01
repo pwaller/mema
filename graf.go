@@ -113,6 +113,12 @@ func make_window(w, h int, title string) func() {
 	}
 }
 
+func GetViewportWH() (float64, float64) {
+	var viewport [4]int32
+	gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
+	return float64(viewport[2]), float64(viewport[3])
+}
+
 func MouseToProj(x, y int) (float64, float64) {
 	var projmat, modelmat [16]float64
 	var viewport [4]int32
@@ -149,6 +155,8 @@ func Reshape(width, height int) {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	// TODO: For smoothness we must immediately redraw here
 	//gl.Translatef(0.0, 0.0, -40.0)
+	
+	if Draw != nil { Draw() }
 }
 
 func MakeShader(shader_type gl.GLenum, source string) gl.Shader {
