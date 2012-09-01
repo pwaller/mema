@@ -24,7 +24,7 @@ func (d *ProgramData) BuildStree() *stree.Tree {
 			   		" - ", d.records[i].FunctionCall().FuncPointer, " ", i_start, " ", i)
 			}
 			if s.size != 0 {
-				tree.Push(i_start, i)
+				tree.Push(i_start, i-1)
 			}
 		}
 	}

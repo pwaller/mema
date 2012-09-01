@@ -430,11 +430,12 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 			
 			continue
 		} else if r.Type == MEMA_FUNC_EXIT {
-			stack_depth--
 			
 			y := float32(int64(len(*vc)) - start)
 			c := Color{255, 64, 64, 255}
 			vc.Add(ColorVertex{c, Vertex{2.1 + float32(stack_depth) / 80., y}})
+			
+			stack_depth--
 			
 			continue
 		} else {
