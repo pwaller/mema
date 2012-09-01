@@ -195,7 +195,7 @@ func main_loop(data *ProgramData) {
 			//x, y, px, py, rec, rec_actual, dpy, di)
 		
 		if rec_actual > 0 && rec_actual < data.nrecords {
-			log.Print(data.records[rec_actual])
+			//log.Print(data.records[rec_actual])
 		}
 		
 		update_stack()
