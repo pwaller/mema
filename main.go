@@ -64,6 +64,7 @@ func main_loop(data *ProgramData) {
 	var rec, rec_actual int64 = 0, 0
 	
 	var stacktext []*Text
+	var recordtext *Text = nil
 	
 	var mousex, mousey, mousedownx, mousedowny int
 	var mousepx, mousepy float64
@@ -121,6 +122,12 @@ func main_loop(data *ProgramData) {
 			case glfw.KeyPress:
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
+				
+				if rec_actual > 0 && rec_actual < data.nrecords {
+					log.Print(data.records[rec_actual])
+					//recordtext = MakeText(data.records[rec_actual].String(), 32)
+				}
+				
 			case glfw.KeyRelease:
 				lbutton = false
 			}
@@ -147,8 +154,10 @@ func main_loop(data *ProgramData) {
 		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%d",
 			//x, y, px, py, rec, rec_actual, dpy, di)
 		
+		if recordtext != nil { recordtext.destroy(); recordtext = nil }
 		if rec_actual > 0 && rec_actual < data.nrecords {
 			//log.Print(data.records[rec_actual])
+			recordtext = MakeText(data.records[rec_actual].String(), 32)
 		}
 		
 		update_stack()
@@ -157,13 +166,15 @@ func main_loop(data *ProgramData) {
 	Draw = func() {
 	
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		gl.LineWidth(1)
+		
+		// Draw the memory access/function data
 		N := *nback
 		wrapped := data.Draw(i, N)
 		if wrapped {
 			i = -int64(*nback)
 		}
 		
+		// Draw the mouse point
 		gl.PushMatrix()
 		gl.Translated(0, -2, 0)
 		gl.Scaled(1, 4 / float64(*nback), 1)
@@ -176,6 +187,7 @@ func main_loop(data *ProgramData) {
 		gl.End()
 		gl.PopMatrix()
 		
+		// Draw any text
 		// TODO: Move matrix hackery somewhere else
 		gl.MatrixMode(gl.PROJECTION)
 		gl.PushMatrix()
@@ -189,6 +201,10 @@ func main_loop(data *ProgramData) {
 		for text_idx := range stacktext {
 			stacktext[text_idx].Draw(int(w*0.55), int(h) - 35 - text_idx*16)
 		}
+		if recordtext != nil {
+			recordtext.Draw(int(w*0.55), 35)
+		}
+		
 		gl.Disable(gl.TEXTURE_2D)
 		
 		gl.PopMatrix()
