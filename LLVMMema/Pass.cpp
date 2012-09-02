@@ -141,15 +141,16 @@ namespace {
                * func_exit  = cast<Function>(
         M.getOrInsertFunction("__mema_function_exit",  myIRB.getVoidTy(), IntptrTy, NULL));
       
+      Value* funcptr = myIRB.CreatePointerCast(&F, IntptrTy);
       // Instrument function entry
-      myIRB.CreateCall(func_entry, myIRB.CreatePointerCast(&F, IntptrTy));
+      myIRB.CreateCall(func_entry, funcptr);
       
       /// Instrument function returns
       for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ++FI) {
         for (BasicBlock::iterator BI = FI->begin(), BE = FI->end(); BI != BE; ++BI) {
           if (!isa<ReturnInst>(BI)) continue;
           IRBuilder<> irb(BI);
-          irb.CreateCall(func_exit, myIRB.CreatePointerCast(&F, IntptrTy));
+          irb.CreateCall(func_exit, funcptr);
         }
       }
       
