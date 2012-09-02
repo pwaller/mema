@@ -149,6 +149,7 @@ typedef struct {
   };
 } MemAccess;
 
+static bool mema_initialized = false;
 
 static const char *kMemaModuleCtorName = "mema.module_ctor";
 static const char *kMemaInitName = "__mema_init";
@@ -274,8 +275,11 @@ void __mema_enable()  { if (flags()->verbosity) printf("__mema_enable()\n");  fl
 void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); flags()->disable = true ; }
 
 void __mema_access(uptr addr, char size, bool is_write) {
-  if (flags()->disable) return;
-  // TODO: Size?
+  if (!mema_initialized || flags()->disable) return;
+  
+  //if (addr_in_buf.insert(addr).second) return;// Only do this once per buffer clearing
+  
+  // TODO: something with the size variable?
   GET_CALLER_PC_BP_SP;
   
   struct timeval tv;
@@ -303,8 +307,6 @@ void __mema_finalize() {
   if (memaccess_fd != -1)
     close(memaccess_fd);
 }
-
-static bool mema_initialized = false;
 
 void __mema_initialize() {
   //std::cout << "mema_initialize()" << std::endl;
