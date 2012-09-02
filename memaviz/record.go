@@ -1,3 +1,5 @@
+// record.go: handling individual mema instrumentation events
+
 package main
 
 import (
@@ -64,6 +66,8 @@ func (r Record) String() string {
 
 type FunctionCall struct {
 	FuncPointer uint64
+	// TODO: Add PC.
+	//       Any other useful data?
 }
 
 type MemAccess struct {

@@ -1,3 +1,5 @@
+// data.go: handling the data we are going to visualize
+
 package main
 
 import (

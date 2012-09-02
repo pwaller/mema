@@ -1,3 +1,6 @@
+// functree.go: Building a tree to efficiently determine a callstack given a
+// 			 	record index
+
 package main
 
 import (

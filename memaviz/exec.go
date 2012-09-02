@@ -1,4 +1,4 @@
-// Code for handling executable file contents, determining symbols, etc
+// binary.go: handling executable file contents, determining symbols, etc
 
 package main
 
