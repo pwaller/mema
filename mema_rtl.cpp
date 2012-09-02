@@ -246,8 +246,8 @@ void __mema_function_entry(uptr addr) {
   
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_FUNC_ENTER;
-  f.acc.pc = pc; f.acc.bp = bp; f.acc.sp = sp;
-  f.acc.addr = addr;
+  //f.acc.pc = pc; f.acc.bp = bp; f.acc.sp = sp;
+  f.func.addr = addr;
   
   // Round-robbin buffer
   if (next_free_mem_access == last_free_mem_access) {
