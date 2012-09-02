@@ -87,7 +87,7 @@ func NewBinary(path string) *Binary {
 
 	dw, err := file.DWARF()
 	if err != nil {
-		log.Printf("!! No DWARF for %q", path)
+		log.Printf("!! No DWARF for %q err = %v", path, err)
 		dw = nil
 	}
 
@@ -95,7 +95,7 @@ func NewBinary(path string) *Binary {
 	result := &Binary{path, file, dw, make(map[uint64]*elf.Symbol),
 		make(map[uint64]*dwarf.Entry), &tree}
 
-	if true {
+	if dw != nil {
 		//tree := result.dwarf_stree
 		dwarf_entries := &result.dwarf_entries
 
@@ -210,7 +210,7 @@ func (d *ProgramData) GetDwarf(addr uint64) []*dwarf.Entry {
 
 func (r *MemRegion) GetDwarf(addr uint64) []*dwarf.Entry {
 	binary := r.GetBinary()
-	if binary == nil {
+	if binary == nil || binary.dwarf == nil {
 		return make([]*dwarf.Entry, 0)
 	}
 
