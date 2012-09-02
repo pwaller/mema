@@ -18,9 +18,9 @@ func demangle(sym string) string {
 
 	csym := C.CString(sym)
 	defer C.free(unsafe.Pointer(csym))
-	
+
 	var status C.int
-	
+
 	// __cxa_demangle has a length field, but it's the length of the buffer,
 	// not the length of the resulting string.
 	cdemangled := C.__cxa_demangle(csym, nil, nil, &status)
@@ -29,8 +29,8 @@ func demangle(sym string) string {
 		return sym
 	}
 	defer C.free(unsafe.Pointer(cdemangled))
-		
+
 	sym = C.GoString(cdemangled)
-	
+
 	return sym
 }
