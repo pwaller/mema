@@ -28,7 +28,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 
-#include "llvm/IRBuilder.h"
+#include "llvm/Support/IRBuilder.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
 #include <vector>
