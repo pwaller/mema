@@ -2,7 +2,7 @@
 
 # to install: ln -s ../../pre-commit .git/hooks
 
-# Taken from https://gist.github.com/2781569
+# Taken from https://gist.github.com/2781569, and since modified, somewhat
 
 # Author: slowpoke <proxypoke at lavabit dot com>
 #
@@ -19,6 +19,13 @@
 # Take note that the ASCII filename check of the standard hook was
 # removed. Go is unicode, and so should be the filenames. Stop using
 # obsolete operating systems without proper Unicode support.
+
+REPO_PATH=$PWD
+git stash -q --keep-index --include-untracked
+git_unstash() {
+	git --work-tree "$REPO_PATH" --git-dir "$REPO_PATH/.git" stash pop -q
+}
+trap git_unstash EXIT
 
 if git rev-parse --verify HEAD >/dev/null 2>&1
 then
