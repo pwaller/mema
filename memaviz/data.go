@@ -19,7 +19,6 @@ import (
 type ProgramData struct {
 	filename           string
 	region             []MemRegion
-	access             []MemAccess
 	records            Records
 	nrecords           int64
 	quiet_pages        map[uint64]bool
@@ -57,8 +56,6 @@ func NewProgramData(filename string) *ProgramData {
 
 	stack := (*data.stack_stree).Query(100, 100)
 	log.Print(" -- stree test:", stack)
-
-	log.Print("Read ", len(data.access), " records")
 
 	active_regions := data.ActiveRegionIDs()
 	if *verbose {
@@ -174,16 +171,6 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 func (data *ProgramData) ParseBlock(bslice []byte) {
 	var records Records
 	records.FromBytes(bslice)
-
-	for i := range records {
-		r := &records[i]
-		// TODO: Something with the other record types
-		if r.Type == MEMA_ACCESS {
-			data.access = append(data.access, *r.MemAccess())
-		}
-		i++
-		continue
-	}
 }
 
 func (d *ProgramData) RegionID(addr uint64) int {
@@ -207,7 +194,6 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 			continue
 		}
 		a := r.MemAccess()
-		//a := &d.access[i]
 		active[d.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 
@@ -347,9 +333,9 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 
 	vc := &ColorVertices{}
 
-	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//	   Function calls here appear to be the biggest bottleneck
+	// 		OTOH, this might not be supported on older cards
 	var stack_depth int
 
 	for pos := start; pos < min(start+N, int64(data.nrecords)); pos++ {
@@ -378,7 +364,7 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 
 			continue
 		} else {
-			log.Panic()
+			log.Panic("Unexpected record type: ", r.Type)
 		}
 		a := r.MemAccess()
 
