@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"debug/dwarf"
 	"debug/elf"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +15,15 @@ import (
 
 	"github.com/toberndo/go-stree/stree"
 )
+
+type MemRegion struct {
+	low, hi                             uint64
+	perms, offset, dev, inode, pathname string
+}
+
+func (r *MemRegion) String() string {
+	return fmt.Sprintf("%x-%x %s", r.low, r.hi, r.pathname)
+}
 
 type Binary struct {
 	pathname  string
