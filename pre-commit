@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# to install: ln -s ../../pre-commit .git/hooks
+
+# Taken from https://gist.github.com/2781569
+
+# Author: slowpoke <proxypoke at lavabit dot com>
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without any warranty.
+#
+# A pre-commit hook for go projects. In addition to the standard
+# checks from the sample hook, it builds the project with go build,
+# runs the tests (if any), formats the source code with go fmt, and
+# finally go vet to make sure only correct and good code is committed.
+#
+# Take note that the ASCII filename check of the standard hook was
+# removed. Go is unicode, and so should be the filenames. Stop using
+# obsolete operating systems without proper Unicode support.
+
+if git rev-parse --verify HEAD >/dev/null 2>&1
+then
+	against=HEAD
+else
+	# Initial commit: diff against an empty tree object
+	against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+expand_path() {
+  if [ -d "$1" ]; then
+    cd "$1"
+    echo $PWD
+    return
+  fi
+
+  if [ "${parent:0:1}" = "/" ]; then
+    echo $1
+  else
+    echo $PWD/$1
+  fi
+}
+
+# Used in .envrc
+path_add() {
+  local old_paths=${!1}
+  local path=`expand_path "$2"`
+
+  if [ -z "$old_paths" ]; then
+    old_paths="$path"
+  else
+    old_paths="$path:$old_paths"
+  fi
+
+  export $1="$old_paths"
+}
+
+function check_go() {
+	pushd $1 &> /dev/null
+
+	[ -f .envrc ] && source .envrc
+
+	# If there are no go files, it makes no sense to run the other commands
+	# (and indeed, go build would fail). This is undesirable.
+	if [ -z "$(ls | grep '\.go$')" ]
+	then
+		exit 0
+	fi
+	
+	echo go fmt
+	#go fmt >/dev/null 2>&1
+	BADFILES=$($(go fmt -n | sed 's/-w/-w=0 -tabwidth=4 -tabs=true/'))
+	if [ -n "$BADFILES" ]
+	then
+		echo "Failed. These files need \`go fmt\` to be run:"
+		echo "$(echo "$BADFILES" | xargs)"
+
+		exit 1
+	fi
+	
+	echo go build
+	go build >/dev/null 2>&1
+	if [ $? -ne 0 ]
+	then
+		echo "Failed to build project. Please check the output of"
+		echo "go build or run commit with --no-verify if you know"
+		echo "what you are doing."
+		exit 1
+	fi
+
+	echo go test
+	go test >/dev/null 2>&1
+	if [ $? -ne 0 ]
+	then
+		echo "Failed to run tests. Please check the output of"
+		echo "go test or run commit with --no-verify if you know"
+		echo "what you are doing."
+		exit 1
+	fi
+
+	go vet
+	go vet >/dev/null 2>&1
+	if [ $? -ne 0 ]
+	then
+		echo "go vet has detected potential issues in your project."
+		echo "Please check its output or run commit with --no-verify"
+		echo "if you know what you are doing."
+		exit 1
+	fi
+	popd &> /dev/null
+}
+
+check_go ./memaviz/
