@@ -200,7 +200,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 		page_activity[page]++
 	}
 	result := make([]int, 0)
-	for k, _ := range active {
+	for k := range active {
 		result = append(result, k)
 	}
 	sort.Ints(result)
@@ -234,7 +234,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	// Build list of pages which are active, count active pages to the left
 	active_pages := make([]uint64, len(d.active_pages))
 	i := 0
-	for page, _ := range d.active_pages {
+	for page := range d.active_pages {
 		active_pages[i] = page
 		i++
 	}
@@ -373,7 +373,7 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 			continue
 		}
 
-		x := float32(a.Addr-data.n_inactive_to_left[page]**PAGE_SIZE) / float32(width)
+		x := float32((a.Addr - data.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
 		x = (x - 0.5) * 4
 
 		if x > 4 || x < -4 {

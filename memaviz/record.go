@@ -38,9 +38,9 @@ func RecordSize() int {
 type Records []Record
 
 func (records *Records) FromBytes(bslice []byte) {
-	if len(bslice)%RecordSize() != 0 {
+	if (len(bslice) % RecordSize()) != 0 {
 		log.Panic("Unexpectedly have some bytes left over.. n=",
-			len(bslice)%RecordSize())
+			(len(bslice) % RecordSize()))
 	}
 	n_records := len(bslice) / RecordSize()
 	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
