@@ -167,6 +167,9 @@ static const MemAccess * first_mem_access = &mem_accesses[0],
 
 static int memaccess_fd = -1;
 
+unsigned int total_uncompressed_size = 0;
+unsigned int total_compressed_size = 0;
+
 void __mema_empty_buffer() {
   // Protect against self-examination
   mema_initialized = false; // TODO: This will not work in a threaded environment
@@ -208,6 +211,9 @@ void __mema_empty_buffer() {
       sizeof(compressed_size));
                    
     uptr r1 = write(memaccess_fd, compressed1, compressed_size1);
+
+    total_uncompressed_size += sizeof(compressed_size) + uncompressed_size;
+    total_compressed_size += sizeof(compressed_size) + compressed_size1;
     
     //Report("memaccess: Compressed size: %d (max %d) %p %p\n", compressed_size, len, r, r1);
     if ((size_t)r1 != compressed_size1) {
@@ -309,6 +315,8 @@ void __mema_finalize() {
   __mema_empty_buffer();
   if (memaccess_fd != -1)
     close(memaccess_fd);
+  printf("Total bytes written (compressed)  : %i\n", total_compressed_size);
+  printf("Total bytes written (uncompressed): %i\n", total_uncompressed_size);
 }
 
 void __mema_initialize() {
@@ -329,6 +337,8 @@ void __mema_initialize() {
   memaccess_fd = open(flags()->filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
   
   write(memaccess_fd, "MEMACCES", 8); // magic bytes
+  total_uncompressed_size += 8;
+  total_compressed_size += 8;
   
   printf("Will write memaccess data to %s..\n", flags()->filename);
   
@@ -339,12 +349,17 @@ void __mema_initialize() {
   
   do {
     bytes_read = read(maps_fd, buf, sizeof(buf));
+    total_uncompressed_size += bytes_read;
+    total_compressed_size += bytes_read;
     if (bytes_read > 0)
       write(memaccess_fd, buf, bytes_read);    
   } while (bytes_read > 0);  
   
   write(memaccess_fd, "\0", 1);    
     atexit(__mema_finalize);
+  total_uncompressed_size += 1;
+  total_compressed_size += 1;
+
 }
 
 }
