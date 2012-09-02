@@ -31,41 +31,44 @@ func exists(path string) bool {
 }
 
 func GetDebugFilename(path string, file *elf.File) string {
+	debugname := filepath.Base(path)
 	for i := range file.Sections {
 		s := file.Sections[i]
 		if s.Name == ".gnu_debuglink" {
 			data, err := s.Data()
 			if err == nil {
 				nul := bytes.IndexByte(data, 0)
-				debugname := string(data[:nul])
-
-				// From http://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html
-				// [not checked, don't know how to get BID.]
-				// /usr/lib/debug/.build-id/ab/cdef1234.debug 
-				// /usr/bin/ls.debug
-				// /usr/bin/.debug/ls.debug
-				// /usr/lib/debug/usr/bin/ls.debug
-
-				file_dir := filepath.Dir(path)
-				debug_path := file_dir + "/.debug/" + debugname
-				if exists(debug_path) {
-					return debug_path
-				}
-
-				debug_path = "/usr/lib/debug" + file_dir + "/" + debugname
-				if exists(debug_path) {
-					return debug_path
-				}
-
-				debug_path = ("/usr/lib/debug" +
-					strings.Replace(file_dir, "lib64", "lib", -1) +
-					"/" + debugname)
-				if exists(debug_path) {
-					return debug_path
-				}
+				debugname = string(data[:nul])
 			}
 			break
 		}
+	}
+	// From http://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html
+	// [not checked, don't know how to get BID.]
+	// /usr/lib/debug/.build-id/ab/cdef1234.debug 
+	// /usr/bin/ls.debug
+	// /usr/bin/.debug/ls.debug
+	// /usr/lib/debug/usr/bin/ls.debug
+
+	file_dir := filepath.Dir(path)
+	debug_path := file_dir + "/.debug/" + debugname
+	if exists(debug_path) {
+		log.Print(debug_path)
+		return debug_path
+	}
+
+	debug_path = "/usr/lib/debug" + file_dir + "/" + debugname
+	if exists(debug_path) {
+		log.Print(debug_path)
+		return debug_path
+	}
+
+	debug_path = ("/usr/lib/debug" +
+		strings.Replace(file_dir, "lib64", "lib", -1) +
+		"/" + debugname)
+	if exists(debug_path) {
+		log.Print(debug_path)
+		return debug_path
 	}
 	return ""
 }
