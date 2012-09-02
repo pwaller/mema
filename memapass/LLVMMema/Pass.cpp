@@ -19,6 +19,7 @@
 
 #include "llvm/Module.h"
 #include "llvm/Function.h"
+#include "llvm/Operator.h"
 
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Type.h"
@@ -206,6 +207,11 @@ namespace {
           } else if (isa<CallInst>(BI)) {
             //errs() << "  Function call..\n";
             // Maybe we could instrument foreign calls?
+          } else if (isa<Operator>(BI)) {
+            Operator* OP = cast<Operator>(BI);
+            //const char * opcode_name = Instruction::getOpcodeName(OP->getOpcode());
+            //if (opcode_name[0] == 'f') errs() << " Operator with opcode " << opcode_name << "\n";
+            continue;
           } else {
             continue;
           }
