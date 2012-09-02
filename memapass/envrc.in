@@ -1,0 +1,17 @@
+## This is a file useful to automatically configure clang to compile things
+## with this build of mema active.
+
+declare -f source_up &> /dev/null && source_up
+
+# Symlink it to .envrc and use direnv: http://direnv.net
+
+BUILD_DIR=@CMAKE_BINARY_DIR@
+path_add LD_LIBRARY_PATH ${BUILD_DIR}/LLVMMema
+
+export CFLAGS="-Xclang -load -Xclang LLVMMema.so"
+export CXXFLAGS="${CFLAGS}"
+export LDFLAGS="-Wl,-rpath,${BUILD_DIR} -L${BUILD_DIR} -lmemartl"
+export LINKFLAGS="${LDFLAGS}"
+
+export CC=clang
+export CXX=clang++
