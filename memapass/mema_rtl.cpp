@@ -168,6 +168,8 @@ static const MemAccess * first_mem_access = &mem_accesses[0],
 static int memaccess_fd = -1;
 
 void __mema_empty_buffer() {
+  // Protect against self-examination
+  mema_initialized = false; // TODO: This will not work in a threaded environment
   if (memaccess_fd == -1) {
     next_free_mem_access = &mem_accesses[0];
     return;
@@ -236,13 +238,14 @@ void __mema_empty_buffer() {
   
     
   next_free_mem_access = &mem_accesses[0];
+  mema_initialized = true; // TODO: This will not work in a threaded environment
 }
 
 extern "C" {
 
 void __mema_function_entry(uptr addr) {
-  if (flags()->disable) return;
-  
+  if (!mema_initialized || flags()->disable) return;
+
   GET_CALLER_PC_BP_SP;
   
   MemAccess & f = *(next_free_mem_access++);
@@ -257,7 +260,7 @@ void __mema_function_entry(uptr addr) {
 }
 
 void __mema_function_exit(uptr addr) {
-  if (flags()->disable) return;
+  if (!mema_initialized || flags()->disable) return;
   
   GET_CALLER_PC_BP_SP;
   
