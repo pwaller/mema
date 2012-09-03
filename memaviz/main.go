@@ -115,15 +115,15 @@ func main_loop(data *ProgramData) {
 			recordtext.destroy()
 			recordtext = nil
 		}
-		if rec_actual > 0 && rec_actual < data.nrecords {
+		if rec_actual > 0 && rec_actual < data.b.nrecords {
 			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(data.records[rec_actual].String(), 32)
+			recordtext = MakeText(data.b.records[rec_actual].String(), 32)
 		}
 
 		for j := range stacktext {
 			stacktext[j].destroy()
 		}
-		stack := data.GetStackNames(rec_actual)
+		stack := data.b.GetStackNames(rec_actual)
 		stacktext = make([]*Text, len(stack))
 		for j := range stack {
 			stacktext[j] = MakeText(stack[j], 32)
@@ -138,8 +138,8 @@ func main_loop(data *ProgramData) {
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
 
-				if rec_actual > 0 && rec_actual < data.nrecords {
-					r := data.records[rec_actual]
+				if rec_actual > 0 && rec_actual < data.b.nrecords {
+					r := data.b.records[rec_actual]
 
 					if r.Type == MEMA_ACCESS {
 						log.Print(r)
@@ -190,7 +190,7 @@ func main_loop(data *ProgramData) {
 
 		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%d",
 		//x, y, px, py, rec, rec_actual, dpy, di)
-
+		
 		update_text()
 	})
 
@@ -200,7 +200,7 @@ func main_loop(data *ProgramData) {
 
 		// Draw the memory access/function data
 		N := *nback
-		wrapped := data.Draw(i, N)
+		wrapped := data.b.Draw(i, N)
 		if wrapped {
 			i = -int64(*nback)
 		}
@@ -257,6 +257,8 @@ func main_loop(data *ProgramData) {
 		i += *nfram
 
 		Draw()
+
+		//data.update <- true
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1

@@ -199,6 +199,10 @@ func (r *MemRegion) GetBinary() *Binary {
 	return binary
 }
 
+func (data *Block) GetSymbol(addr uint64) string {
+	return data.full_data.GetSymbol(addr)
+}
+
 func (data *ProgramData) GetSymbol(addr uint64) string {
 	region := data.GetRegion(addr)
 	return region.GetSymbol(addr)

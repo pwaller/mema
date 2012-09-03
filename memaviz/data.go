@@ -16,21 +16,55 @@ import (
 	"github.com/toberndo/go-stree/stree"
 )
 
-type ProgramData struct {
-	filename           string
-	region             []MemRegion
-	records            Records
-	nrecords           int64
+type Block struct {
+	nrecords    int64
+	records     Records
+	vertex_data []*ColorVertices
+
 	quiet_pages        map[uint64]bool
 	active_pages       map[uint64]bool
 	n_pages_to_left    map[uint64]uint64
 	n_inactive_to_left map[uint64]uint64
-	vertex_data        []*ColorVertices
 	stack_stree        *stree.Tree
+
+	full_data *ProgramData
+	// Texture
+}
+
+type ProgramData struct {
+	filename string
+	region   []MemRegion
+	blocks   []*Block
+
+	b Block
+	//update              chan<- bool
+	//new_block_available <-chan *Block
+	//request_new_block   chan<- int
 }
 
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
+
+	data.b.full_data = data
+	/*
+		data.update := make(chan bool)
+
+		new_block_available := make(chan *Block)
+		data.new_block_available = new_block_available
+
+		go func() {
+			var new_blocks []*Block
+			for {
+				select {
+					case block := <- data.new_block_available:
+						new_blocks = append(new_blocks, block)
+					case <-data.update:
+						data.blocks = append(data.blocks, new_blocks...)
+						new_blocks = []*Block{}
+				}
+			}
+		}()
+	*/
 
 	data.filename = filename
 
@@ -49,15 +83,17 @@ func NewProgramData(filename string) *ProgramData {
 	// TODO: Load on demand sections which will be read
 	data.ParseBlocks(reader)
 
+	//data.BlockParser(reader)
+
 	// TODO: building the stree isn't going to work well with striping across file
-	log.Print("Loading stree..")
-	data.stack_stree = data.BuildStree()
+	log.Print("Loading stree.. ", len(data.b.records))
+	data.b.stack_stree = data.b.BuildStree()
 	log.Print("Loaded stree")
 
-	stack := (*data.stack_stree).Query(100, 100)
+	stack := (*data.b.stack_stree).Query(100, 100)
 	log.Print(" -- stree test:", stack)
 
-	active_regions := data.ActiveRegionIDs()
+	active_regions := data.b.ActiveRegionIDs()
 	if *verbose {
 		log.Printf("Have %d active regions", len(active_regions))
 	}
@@ -131,6 +167,8 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 	round_1 := make([]byte, 1, 20*1024*1024)
 	round_2 := make([]byte, 1, 20*1024*1024)
 
+	block := &data.b
+
 	for {
 		var block_size int64
 		err := binary.Read(reader, binary.LittleEndian, &block_size)
@@ -157,20 +195,15 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 
 		var records Records
 		records.FromBytes(round_2)
-		data.records = append(data.records, records...)
-		data.nrecords += int64(len(records))
+		block.records = append(block.records, records...)
+		block.nrecords += int64(len(records))
 
 		// Read only a limited number of records > nrec, if set.
-		if *nrec != 0 && int64(data.nrecords) > *nrec {
+		if *nrec != 0 && int64(block.nrecords) > *nrec {
 			break
 		}
 	}
-	log.Print("Total records: ", data.nrecords)
-}
-
-func (data *ProgramData) ParseBlock(bslice []byte) {
-	var records Records
-	records.FromBytes(bslice)
+	log.Print("Total records: ", block.nrecords)
 }
 
 func (d *ProgramData) RegionID(addr uint64) int {
@@ -183,7 +216,7 @@ func (d *ProgramData) RegionID(addr uint64) int {
 	return len(d.region)
 }
 
-func (d *ProgramData) ActiveRegionIDs() []int {
+func (d *Block) ActiveRegionIDs() []int {
 	// TODO: Quite a bite of this wants to be moved into NewProgramData
 	active := make(map[int]bool)
 	page_activity := make(map[uint64]uint)
@@ -194,7 +227,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 			continue
 		}
 		a := r.MemAccess()
-		active[d.RegionID(a.Addr)] = true
+		active[d.full_data.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 
 		page_activity[page]++
@@ -261,7 +294,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	return result
 }
 
-func (data *ProgramData) Draw(start, N int64) bool {
+func (data *Block) Draw(start, N int64) bool {
 	defer OpenGLSentinel()()
 
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
@@ -327,7 +360,7 @@ func (data *ProgramData) Draw(start, N int64) bool {
 	return start > NV //int64(data.nrecords)
 }
 
-func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
+func (data *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 
