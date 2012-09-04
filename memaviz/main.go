@@ -105,11 +105,20 @@ func main_loop(data *ProgramData) {
 
 	var updated_this_frame bool = false
 
-	update_stack := func() {
+	update_text := func() {
 		if updated_this_frame {
 			return
 		}
 		updated_this_frame = true
+		
+		if recordtext != nil {
+			recordtext.destroy()
+			recordtext = nil
+		}
+		if rec_actual > 0 && rec_actual < data.nrecords {
+			//log.Print(data.records[rec_actual])
+			recordtext = MakeText(data.records[rec_actual].String(), 32)
+		}
 
 		for j := range stacktext {
 			stacktext[j].destroy()
@@ -182,16 +191,7 @@ func main_loop(data *ProgramData) {
 		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%d",
 		//x, y, px, py, rec, rec_actual, dpy, di)
 
-		if recordtext != nil {
-			recordtext.destroy()
-			recordtext = nil
-		}
-		if rec_actual > 0 && rec_actual < data.nrecords {
-			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(data.records[rec_actual].String(), 32)
-		}
-
-		update_stack()
+		update_text()
 	})
 
 	Draw = func() {
