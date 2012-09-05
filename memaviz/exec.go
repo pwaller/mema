@@ -76,7 +76,8 @@ func GetDebugFilename(path string, file *elf.File) string {
 func NewBinary(path string) *Binary {
 	file, err := elf.Open(path)
 	if err != nil {
-		log.Panic("Problem loading elf: ", err, " at ", path)
+		log.Print("Binary not available for ", path)
+		return nil
 	}
 
 	debug_filename := GetDebugFilename(path, file)
