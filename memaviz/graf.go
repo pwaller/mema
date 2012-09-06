@@ -141,10 +141,7 @@ func MouseToProj(x, y int) (float64, float64) {
 	var viewport [4]int32
 
 	gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
-	gl.PushMatrix()
-	gl.LoadIdentity()
 	gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
-	gl.PopMatrix()
 
 	gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
 	// Need to convert so that y is at lower left
@@ -157,21 +154,16 @@ func MouseToProj(x, y int) (float64, float64) {
 }
 
 func Reshape(width, height int) {
-	//h := float64(height) / float64(width)
-
 	gl.Viewport(0, 0, width, height)
 
 	gl.MatrixMode(gl.PROJECTION)
 	gl.LoadIdentity()
-	//gl.Frustum(-1.0, 1.0, -h, h, 5.0, 60.0)
 	gl.Ortho(-2.1, 6.1, -2.25, 2.1, -1, 1)
 
 	gl.MatrixMode(gl.MODELVIEW)
 	gl.LoadIdentity()
 
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	// TODO: For smoothness we must immediately redraw here
-	//gl.Translatef(0.0, 0.0, -40.0)
 
 	if Draw != nil {
 		Draw()
@@ -302,4 +294,40 @@ func debug_coords() {
 	gl.MatrixMode(gl.PROJECTION)
 	gl.PopMatrix()
 	gl.MatrixMode(gl.MODELVIEW)
+}
+
+func DrawQuadi(x, y, w, h int) {
+	var u, v, u2, v2 float32 = 0, 1, 1, 0
+
+	With(Primitive{gl.QUADS}, func() {
+		gl.TexCoord2f(u, v)
+		gl.Vertex2i(x, y)
+
+		gl.TexCoord2f(u2, v)
+		gl.Vertex2i(x+w, y)
+
+		gl.TexCoord2f(u2, v2)
+		gl.Vertex2i(x+w, y+h)
+
+		gl.TexCoord2f(u, v2)
+		gl.Vertex2i(x, y+h)
+	})
+}
+
+func DrawQuadd(x, y, w, h float64) {
+	var u, v, u2, v2 float32 = 0, 1, 1, 0
+
+	With(Primitive{gl.QUADS}, func() {
+		gl.TexCoord2f(u, v)
+		gl.Vertex2d(x, y)
+
+		gl.TexCoord2f(u2, v)
+		gl.Vertex2d(x+w, y)
+
+		gl.TexCoord2f(u2, v2)
+		gl.Vertex2d(x+w, y+h)
+
+		gl.TexCoord2f(u, v2)
+		gl.Vertex2d(x, y+h)
+	})
 }

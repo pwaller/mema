@@ -329,16 +329,13 @@ func (data *Block) Draw(start, N int64) bool {
 		data.vertex_data[0] = data.GetAccessVertexData(0, int64(data.nrecords))
 	}
 
-	gl.PushMatrix()
+	With(Matrix{gl.MODELVIEW}, func() {
+		gl.Translated(0, -2, 0)
+		gl.Scaled(1, 4/float64(*nback), 1)
+		gl.Translated(0, -float64(start), 0)
 
-	gl.Translated(0, -2, 0)
-	gl.Scaled(1, 4/float64(*nback), 1)
-	gl.Translated(0, -float64(start), 0)
-	OpenGLSentinel()
-
-	data.vertex_data[0].DrawPartial(start, *nback)
-	gl.PopMatrix()
-	OpenGLSentinel()
+		data.vertex_data[0].DrawPartial(start, *nback)
+	})
 
 	NV := int64(len(*data.vertex_data[0]))
 

@@ -110,7 +110,7 @@ func main_loop(data *ProgramData) {
 			return
 		}
 		updated_this_frame = true
-		
+
 		if recordtext != nil {
 			recordtext.destroy()
 			recordtext = nil
@@ -190,7 +190,7 @@ func main_loop(data *ProgramData) {
 
 		//log.Printf("Mouse motion: (%3d, %3d), (%f, %f), (%d, %d) dpy=%f di=%d",
 		//x, y, px, py, rec, rec_actual, dpy, di)
-		
+
 		update_text()
 	})
 
@@ -206,45 +206,43 @@ func main_loop(data *ProgramData) {
 		}
 
 		// Draw the mouse point
-		gl.PushMatrix()
-		gl.Translated(0, -2, 0)
-		gl.Scaled(1, 4/float64(*nback), 1)
-		gl.Translated(0, float64(rec), 0)
 
-		gl.PointSize(5)
-		gl.Begin(gl.POINTS)
-		gl.Color4f(1, 1, 1, 1)
-		gl.Vertex3d(mousepx, 0, 0)
-		gl.End()
-		gl.PopMatrix()
+		// Draw the mouse point
+		With(Matrix{gl.MODELVIEW}, func() {
+			gl.Translated(0, -2, 0)
+			gl.Scaled(1, 4/float64(*nback), 1)
+			gl.Translated(0, float64(rec), 0)
+
+			gl.PointSize(10)
+			With(Primitive{gl.POINTS}, func() {
+				gl.Color4f(1, 1, 1, 1)
+				gl.Vertex3d(mousepx, 0, 0)
+			})
+		})
 
 		// Draw any text
-		// TODO: Move matrix hackery somewhere else
-		gl.MatrixMode(gl.PROJECTION)
-		gl.PushMatrix()
-		gl.LoadIdentity()
+		With(Matrix{gl.PROJECTION}, func() {
+			gl.LoadIdentity()
 
-		w, h := GetViewportWH()
-		gl.Ortho(0, w, 0, h, -1, 1)
-		gl.Color4f(1, 1, 1, 1)
-		gl.Enable(gl.TEXTURE_2D)
-		text.Draw(0, 0)
-		for text_idx := range stacktext {
-			stacktext[text_idx].Draw(int(w*0.55), int(h)-35-text_idx*16)
-		}
-		for text_idx := range dwarftext {
-			dwarftext[text_idx].Draw(int(w*0.55), 35+text_idx*16)
-		}
-		if recordtext != nil {
-			recordtext.Draw(int(w*0.55), 35)
-		}
+			w, h := GetViewportWH()
+			gl.Ortho(0, w, 0, h, -1, 1)
+			gl.Color4f(1, 1, 1, 1)
 
-		gl.Disable(gl.TEXTURE_2D)
+			With(Attrib{gl.ENABLE_BIT}, func() {
+				gl.Enable(gl.TEXTURE_2D)
+				text.Draw(0, 0)
+				for text_idx := range stacktext {
+					stacktext[text_idx].Draw(int(w*0.55), int(h)-35-text_idx*16)
+				}
+				for text_idx := range dwarftext {
+					dwarftext[text_idx].Draw(int(w*0.55), 35+text_idx*16)
+				}
+				if recordtext != nil {
+					recordtext.Draw(int(w*0.55), 35)
+				}
+			})
+		})
 
-		gl.PopMatrix()
-		gl.MatrixMode(gl.MODELVIEW)
-
-		OpenGLSentinel()
 		glfw.SwapBuffers()
 	}
 
