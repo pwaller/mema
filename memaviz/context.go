@@ -17,17 +17,47 @@ func With(c Context, action func()) {
 	action()
 }
 
-type Texture struct {
-	Object interface {
-		Bind(gl.GLenum)
-		Unbind(gl.GLenum)
+func Compound(contexts ...Context) CompoundContextImpl {
+	return CompoundContextImpl{contexts}
+}
+
+type CompoundContextImpl struct{ contexts []Context }
+
+func (c CompoundContextImpl) Enter() {
+	for i := range c.contexts {
+		c.contexts[i].Enter()
 	}
+}
+func (c CompoundContextImpl) Exit() {
+	for i := range c.contexts {
+		c.contexts[len(c.contexts)-i-1].Exit()
+	}
+}
+
+type Bindable interface {
+	Bind()
+	Unbind()
+}
+
+type Framebuffer struct{ Bindable }
+
+func (b Framebuffer) Enter() { b.Bind() }
+func (b Framebuffer) Exit()  { b.Unbind() }
+
+type BindableOneArg interface {
+	Bind(gl.GLenum)
+	Unbind(gl.GLenum)
+}
+
+type Texture struct {
+	BindableOneArg
 	Value gl.GLenum
 }
 
-func (b Texture) Enter() { b.Object.Bind(b.Value) }
-func (b Texture) Exit()  { b.Object.Unbind(b.Value) }
+func (b Texture) Enter() { gl.Enable(gl.TEXTURE_2D); b.Bind(b.Value) }
+func (b Texture) Exit()  { b.Unbind(b.Value); gl.Disable(gl.TEXTURE_2D) }
 
+// A context which preserves the matrix mode, drawing, etc.
 type Matrix struct{ Type gl.GLenum }
 
 func (m Matrix) Enter() {
