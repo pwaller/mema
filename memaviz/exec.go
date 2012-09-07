@@ -1,4 +1,4 @@
-// Code for handling executable file contents, determining symbols, etc
+// binary.go: handling executable file contents, determining symbols, etc
 
 package main
 
@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"debug/dwarf"
 	"debug/elf"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +15,15 @@ import (
 
 	"github.com/toberndo/go-stree/stree"
 )
+
+type MemRegion struct {
+	low, hi                             uint64
+	perms, offset, dev, inode, pathname string
+}
+
+func (r *MemRegion) String() string {
+	return fmt.Sprintf("%x-%x %s", r.low, r.hi, r.pathname)
+}
 
 type Binary struct {
 	pathname  string
@@ -187,6 +197,10 @@ func (r *MemRegion) GetBinary() *Binary {
 	binary := NewBinary(r.pathname)
 	loaded_binaries[r.pathname] = binary
 	return binary
+}
+
+func (data *Block) GetSymbol(addr uint64) string {
+	return data.full_data.GetSymbol(addr)
 }
 
 func (data *ProgramData) GetSymbol(addr uint64) string {

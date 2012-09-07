@@ -110,20 +110,20 @@ func main_loop(data *ProgramData) {
 			return
 		}
 		updated_this_frame = true
-		
+
 		if recordtext != nil {
 			recordtext.destroy()
 			recordtext = nil
 		}
-		if rec_actual > 0 && rec_actual < data.nrecords {
+		if rec_actual > 0 && rec_actual < data.b.nrecords {
 			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(data.records[rec_actual].String(), 32)
+			recordtext = MakeText(data.b.records[rec_actual].String(), 32)
 		}
 
 		for j := range stacktext {
 			stacktext[j].destroy()
 		}
-		stack := data.GetStackNames(rec_actual)
+		stack := data.b.GetStackNames(rec_actual)
 		stacktext = make([]*Text, len(stack))
 		for j := range stack {
 			stacktext[j] = MakeText(stack[j], 32)
@@ -138,8 +138,8 @@ func main_loop(data *ProgramData) {
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
 
-				if rec_actual > 0 && rec_actual < data.nrecords {
-					r := data.records[rec_actual]
+				if rec_actual > 0 && rec_actual < data.b.nrecords {
+					r := data.b.records[rec_actual]
 
 					if r.Type == MEMA_ACCESS {
 						log.Print(r)
@@ -199,52 +199,48 @@ func main_loop(data *ProgramData) {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		// Draw the memory access/function data
-		N := *nback
-		wrapped := data.Draw(i, N)
+		gl.PointSize(2)
+		wrapped := data.b.Draw(i, *nback)
 		if wrapped {
 			i = -int64(*nback)
 		}
 
 		// Draw the mouse point
-		gl.PushMatrix()
-		gl.Translated(0, -2, 0)
-		gl.Scaled(1, 4/float64(*nback), 1)
-		gl.Translated(0, float64(rec), 0)
+		With(Matrix{gl.MODELVIEW}, func() {
+			gl.Translated(0, -2, 0)
+			gl.Scaled(1, 4/float64(*nback), 1)
+			gl.Translated(0, float64(rec), 0)
 
-		gl.PointSize(5)
-		gl.Begin(gl.POINTS)
-		gl.Color4f(1, 1, 1, 1)
-		gl.Vertex3d(mousepx, 0, 0)
-		gl.End()
-		gl.PopMatrix()
+			gl.PointSize(10)
+			With(Primitive{gl.POINTS}, func() {
+				gl.Color4f(1, 1, 1, 1)
+				gl.Vertex3d(mousepx, 0, 0)
+			})
+		})
 
 		// Draw any text
-		// TODO: Move matrix hackery somewhere else
-		gl.MatrixMode(gl.PROJECTION)
-		gl.PushMatrix()
-		gl.LoadIdentity()
+		With(Matrix{gl.PROJECTION}, func() {
+			gl.LoadIdentity()
 
-		w, h := GetViewportWH()
-		gl.Ortho(0, w, 0, h, -1, 1)
-		gl.Color4f(1, 1, 1, 1)
-		gl.Enable(gl.TEXTURE_2D)
-		text.Draw(0, 0)
-		for text_idx := range stacktext {
-			stacktext[text_idx].Draw(int(w*0.55), int(h)-35-text_idx*16)
-		}
-		for text_idx := range dwarftext {
-			dwarftext[text_idx].Draw(int(w*0.55), 35+text_idx*16)
-		}
-		if recordtext != nil {
-			recordtext.Draw(int(w*0.55), 35)
-		}
+			w, h := GetViewportWH()
+			gl.Ortho(0, w, 0, h, -1, 1)
+			gl.Color4f(1, 1, 1, 1)
 
-		gl.Disable(gl.TEXTURE_2D)
+			With(Attrib{gl.ENABLE_BIT}, func() {
+				gl.Enable(gl.TEXTURE_2D)
+				text.Draw(0, 0)
+				for text_idx := range stacktext {
+					stacktext[text_idx].Draw(int(w*0.55), int(h)-35-text_idx*16)
+				}
+				for text_idx := range dwarftext {
+					dwarftext[text_idx].Draw(int(w*0.55), 35+text_idx*16)
+				}
+				if recordtext != nil {
+					recordtext.Draw(int(w*0.55), 35)
+				}
+			})
+		})
 
-		gl.PopMatrix()
-		gl.MatrixMode(gl.MODELVIEW)
-
-		OpenGLSentinel()
 		glfw.SwapBuffers()
 	}
 
@@ -257,6 +253,8 @@ func main_loop(data *ProgramData) {
 		i += *nfram
 
 		Draw()
+
+		//data.update <- true
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1

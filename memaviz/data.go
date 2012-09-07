@@ -1,3 +1,5 @@
+// data.go: handling the data we are going to visualize
+
 package main
 
 import (
@@ -7,120 +9,62 @@ import (
 	"io"
 	"log"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
-	"unsafe"
 
 	"github.com/banthar/gl"
 	"github.com/toberndo/go-stree/stree"
 )
 
-const (
-	MEMA_ACCESS     = 0
-	MEMA_FUNC_ENTER = 1
-	MEMA_FUNC_EXIT  = 2
-)
+type Block struct {
+	nrecords    int64
+	records     Records
+	vertex_data []*ColorVertices
 
-type Record struct {
-	Type int64
-	// Magic int64
-	Content [48]byte // union { MemAccess, FunctionCall }
-}
-
-func (r *Record) MemAccess() *MemAccess {
-	return (*MemAccess)(unsafe.Pointer(&r.Content[0]))
-}
-
-func (r *Record) FunctionCall() *FunctionCall {
-	return (*FunctionCall)(unsafe.Pointer(&r.Content[0]))
-}
-
-var DummyRecord Record
-
-func RecordSize() int {
-	return int(unsafe.Sizeof(DummyRecord))
-}
-
-type Records []Record
-
-func (records *Records) FromBytes(bslice []byte) {
-	if len(bslice)%RecordSize() != 0 {
-		log.Panic("Unexpectedly have some bytes left over.. n=",
-			len(bslice)%RecordSize())
-	}
-	n_records := len(bslice) / RecordSize()
-	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
-	records_header.Data = uintptr(unsafe.Pointer(&bslice[0]))
-	records_header.Len = n_records
-	records_header.Cap = n_records
-}
-
-func (r Record) String() string {
-	if r.Type == MEMA_ACCESS {
-		a := r.MemAccess()
-		//return fmt.Sprintf("r=%d/%x MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
-		//r.Type, r.Magic, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
-		return fmt.Sprintf("r=%d MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
-			r.Type, a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
-	}
-	f := r.FunctionCall()
-	//return fmt.Sprintf("r=%d/%x FunctionCall{ptr=0x%x}",
-	//r.Type, r.Magic, f.FuncPointer)
-	return fmt.Sprintf("r=%d FunctionCall{ptr=0x%x}",
-		r.Type, f.FuncPointer)
-}
-
-type FunctionCall struct {
-	FuncPointer uint64
-}
-
-type MemAccess struct {
-	Time             float64
-	Pc, Bp, Sp, Addr uint64
-	IsWrite          uint64 // because alignment.
-}
-
-func (a MemAccess) String() string {
-	return fmt.Sprintf("MemAccess{t=%f write=%5t 0x%x 0x%x 0x%x 0x%x}",
-		a.Time, a.IsWrite == 1, a.Pc, a.Bp, a.Sp, a.Addr)
-}
-
-type MemRegion struct {
-	low, hi                             uint64
-	perms, offset, dev, inode, pathname string
-}
-
-func (r *MemRegion) String() string {
-	return fmt.Sprintf("%x-%x %s", r.low, r.hi, r.pathname)
-}
-
-type ProgramData struct {
-	filename           string
-	region             []MemRegion
-	access             []MemAccess
-	records            Records
-	nrecords           int64
 	quiet_pages        map[uint64]bool
 	active_pages       map[uint64]bool
 	n_pages_to_left    map[uint64]uint64
 	n_inactive_to_left map[uint64]uint64
-	vertex_data        []*ColorVertices
 	stack_stree        *stree.Tree
+
+	full_data *ProgramData
+	// Texture
 }
 
-func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
-	for i := range data.region {
-		r := &data.region[i]
-		if r.low <= addr && addr < r.hi {
-			return r
-		}
-	}
-	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
+type ProgramData struct {
+	filename string
+	region   []MemRegion
+	blocks   []*Block
+
+	b Block
+	//update              chan<- bool
+	//new_block_available <-chan *Block
+	//request_new_block   chan<- int
 }
 
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
+
+	data.b.full_data = data
+	/*
+		data.update := make(chan bool)
+
+		new_block_available := make(chan *Block)
+		data.new_block_available = new_block_available
+
+		go func() {
+			var new_blocks []*Block
+			for {
+				select {
+					case block := <- data.new_block_available:
+						new_blocks = append(new_blocks, block)
+					case <-data.update:
+						data.blocks = append(data.blocks, new_blocks...)
+						new_blocks = []*Block{}
+				}
+			}
+		}()
+	*/
 
 	data.filename = filename
 
@@ -139,17 +83,17 @@ func NewProgramData(filename string) *ProgramData {
 	// TODO: Load on demand sections which will be read
 	data.ParseBlocks(reader)
 
+	//data.BlockParser(reader)
+
 	// TODO: building the stree isn't going to work well with striping across file
-	log.Print("Loading stree..")
-	data.stack_stree = data.BuildStree()
+	log.Print("Loading stree.. ", len(data.b.records))
+	data.b.stack_stree = data.b.BuildStree()
 	log.Print("Loaded stree")
 
-	stack := (*data.stack_stree).Query(100, 100)
+	stack := (*data.b.stack_stree).Query(100, 100)
 	log.Print(" -- stree test:", stack)
 
-	log.Print("Read ", len(data.access), " records")
-
-	active_regions := data.ActiveRegionIDs()
+	active_regions := data.b.ActiveRegionIDs()
 	if *verbose {
 		log.Printf("Have %d active regions", len(active_regions))
 	}
@@ -162,6 +106,16 @@ func NewProgramData(filename string) *ProgramData {
 	}
 
 	return data
+}
+
+func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
+	for i := range data.region {
+		r := &data.region[i]
+		if r.low <= addr && addr < r.hi {
+			return r
+		}
+	}
+	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
 }
 
 func (data *ProgramData) ParseHeader(reader *bufio.Reader) {
@@ -213,6 +167,8 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 	round_1 := make([]byte, 1, 20*1024*1024)
 	round_2 := make([]byte, 1, 20*1024*1024)
 
+	block := &data.b
+
 	for {
 		var block_size int64
 		err := binary.Read(reader, binary.LittleEndian, &block_size)
@@ -239,30 +195,15 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 
 		var records Records
 		records.FromBytes(round_2)
-		data.records = append(data.records, records...)
-		data.nrecords += int64(len(records))
+		block.records = append(block.records, records...)
+		block.nrecords += int64(len(records))
 
 		// Read only a limited number of records > nrec, if set.
-		if *nrec != 0 && int64(data.nrecords) > *nrec {
+		if *nrec != 0 && int64(block.nrecords) > *nrec {
 			break
 		}
 	}
-	log.Print("Total records: ", data.nrecords)
-}
-
-func (data *ProgramData) ParseBlock(bslice []byte) {
-	var records Records
-	records.FromBytes(bslice)
-
-	for i := range records {
-		r := &records[i]
-		// TODO: Something with the other record types
-		if r.Type == MEMA_ACCESS {
-			data.access = append(data.access, *r.MemAccess())
-		}
-		i++
-		continue
-	}
+	log.Print("Total records: ", block.nrecords)
 }
 
 func (d *ProgramData) RegionID(addr uint64) int {
@@ -275,7 +216,7 @@ func (d *ProgramData) RegionID(addr uint64) int {
 	return len(d.region)
 }
 
-func (d *ProgramData) ActiveRegionIDs() []int {
+func (d *Block) ActiveRegionIDs() []int {
 	// TODO: Quite a bite of this wants to be moved into NewProgramData
 	active := make(map[int]bool)
 	page_activity := make(map[uint64]uint)
@@ -286,14 +227,13 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 			continue
 		}
 		a := r.MemAccess()
-		//a := &d.access[i]
-		active[d.RegionID(a.Addr)] = true
+		active[d.full_data.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 
 		page_activity[page]++
 	}
 	result := make([]int, 0)
-	for k, _ := range active {
+	for k := range active {
 		result = append(result, k)
 	}
 	sort.Ints(result)
@@ -327,7 +267,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	// Build list of pages which are active, count active pages to the left
 	active_pages := make([]uint64, len(d.active_pages))
 	i := 0
-	for page, _ := range d.active_pages {
+	for page := range d.active_pages {
 		active_pages[i] = page
 		i++
 	}
@@ -354,7 +294,7 @@ func (d *ProgramData) ActiveRegionIDs() []int {
 	return result
 }
 
-func (data *ProgramData) Draw(start, N int64) bool {
+func (data *Block) Draw(start, N int64) bool {
 	defer OpenGLSentinel()()
 
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
@@ -378,7 +318,10 @@ func (data *ProgramData) Draw(start, N int64) bool {
 			}
 		}
 
-		vc.Draw()
+		With(Attrib{gl.ENABLE_BIT}, func() {
+			gl.Disable(gl.LINE_SMOOTH)
+			vc.Draw()
+		})
 	}
 
 	gl.LineWidth(1)
@@ -389,16 +332,13 @@ func (data *ProgramData) Draw(start, N int64) bool {
 		data.vertex_data[0] = data.GetAccessVertexData(0, int64(data.nrecords))
 	}
 
-	gl.PushMatrix()
+	With(Matrix{gl.MODELVIEW}, func() {
+		gl.Translated(0, -2, 0)
+		gl.Scaled(1, 4/float64(*nback), 1)
+		gl.Translated(0, -float64(start), 0)
 
-	gl.Translated(0, -2, 0)
-	gl.Scaled(1, 4/float64(*nback), 1)
-	gl.Translated(0, -float64(start), 0)
-	OpenGLSentinel()
-
-	data.vertex_data[0].DrawPartial(start, *nback)
-	gl.PopMatrix()
-	OpenGLSentinel()
+		data.vertex_data[0].DrawPartial(start, *nback)
+	})
 
 	NV := int64(len(*data.vertex_data[0]))
 
@@ -420,15 +360,15 @@ func (data *ProgramData) Draw(start, N int64) bool {
 	return start > NV //int64(data.nrecords)
 }
 
-func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
+func (data *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 
 	width := uint64(len(data.active_pages)) * *PAGE_SIZE
 
 	vc := &ColorVertices{}
 
-	// TODO: Do coordinate scaling on the GPU (modify orthographic scaling)
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//	   Function calls here appear to be the biggest bottleneck
+	// 		OTOH, this might not be supported on older cards
 	var stack_depth int
 
 	for pos := start; pos < min(start+N, int64(data.nrecords)); pos++ {
@@ -457,7 +397,7 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 
 			continue
 		} else {
-			log.Panic()
+			log.Panic("Unexpected record type: ", r.Type)
 		}
 		a := r.MemAccess()
 
@@ -466,7 +406,7 @@ func (data *ProgramData) GetAccessVertexData(start, N int64) *ColorVertices {
 			continue
 		}
 
-		x := float32(a.Addr-data.n_inactive_to_left[page]**PAGE_SIZE) / float32(width)
+		x := float32((a.Addr - data.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
 		x = (x - 0.5) * 4
 
 		if x > 4 || x < -4 {

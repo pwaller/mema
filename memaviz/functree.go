@@ -1,3 +1,6 @@
+// functree.go: Building a tree to efficiently determine a callstack given a
+// 			 	record index
+
 package main
 
 import (
@@ -7,7 +10,7 @@ import (
 	"github.com/toberndo/go-stree/stree"
 )
 
-func (d *ProgramData) BuildStree() *stree.Tree {
+func (d *Block) BuildStree() *stree.Tree {
 	tree := stree.NewTree()
 	s := new(Stack)
 
@@ -35,7 +38,7 @@ func (d *ProgramData) BuildStree() *stree.Tree {
 }
 
 // Returns the stack frame for a given record id
-func (d *ProgramData) GetStack(record int64) []*Record {
+func (d *Block) GetStack(record int64) []*Record {
 	intervals := (*d.stack_stree).Query(int(record), int(record))
 	entry_indices := make([]int, len(intervals))
 	for i := range intervals {
@@ -50,7 +53,7 @@ func (d *ProgramData) GetStack(record int64) []*Record {
 	return result
 }
 
-func (d *ProgramData) GetStackNames(record int64) []string {
+func (d *Block) GetStackNames(record int64) []string {
 	stack := d.GetStack(record)
 	result := make([]string, len(stack))
 	for i := range stack {
