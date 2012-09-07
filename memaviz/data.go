@@ -318,7 +318,10 @@ func (data *Block) Draw(start, N int64) bool {
 			}
 		}
 
-		vc.Draw()
+		With(Attrib{gl.ENABLE_BIT}, func() {
+			gl.Disable(gl.LINE_SMOOTH)
+			vc.Draw()
+		})
 	}
 
 	gl.LineWidth(1)

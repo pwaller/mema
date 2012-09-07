@@ -199,13 +199,11 @@ func main_loop(data *ProgramData) {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		// Draw the memory access/function data
-		N := *nback
-		wrapped := data.b.Draw(i, N)
+		gl.PointSize(2)
+		wrapped := data.b.Draw(i, *nback)
 		if wrapped {
 			i = -int64(*nback)
 		}
-
-		// Draw the mouse point
 
 		// Draw the mouse point
 		With(Matrix{gl.MODELVIEW}, func() {

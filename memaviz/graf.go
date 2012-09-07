@@ -67,7 +67,6 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
 	OpenGLSentinel()
-	gl.PointSize(2)
 	gl.DrawArrays(gl.POINTS, int(i), int(N))
 	defer func() {
 		if r := recover(); r != nil {
@@ -86,7 +85,7 @@ func Init() {
 	//gl.Enable(gl.DEPTH_TEST)
 
 	// Anti-aliasing
-	//gl.Enable(gl.LINE_SMOOTH)
+	gl.Enable(gl.LINE_SMOOTH)
 	gl.Enable(gl.BLEND)
 	//gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
