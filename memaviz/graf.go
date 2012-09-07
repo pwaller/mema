@@ -1,8 +1,15 @@
 package main
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
+
 	"log"
+	"os"
 	"runtime"
+	"strings"
 	"unsafe"
 
 	"github.com/banthar/gl"
@@ -90,7 +97,12 @@ func Init() {
 	//gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
 	//gl.BlendFunc(gl.SRC_ALPHA_SATURATE, gl.ONE)
-	//gl.Hint(gl.LINE_SMOOTH_HINT, gl.NICEST)
+	gl.Hint(gl.LINE_SMOOTH_HINT, gl.NICEST)
+
+	extensions := gl.GetString(gl.EXTENSIONS)
+	if !strings.Contains(extensions, "GL_ARB_framebuffer_object") {
+		log.Panic("No FBO support :-(")
+	}
 }
 
 func make_window(w, h int, title string) func() {
@@ -167,6 +179,58 @@ func Reshape(width, height int) {
 	if Draw != nil {
 		Draw()
 	}
+}
+
+type TextureBackedFBO struct {
+	w, h    int
+	texture gl.Texture
+	gl.Framebuffer
+	rbo gl.Renderbuffer
+}
+
+func NewTextureBackedFBO(w, h int) *TextureBackedFBO {
+	fbo := &TextureBackedFBO{w, h, gl.GenTexture(), gl.GenFramebuffer(), gl.GenRenderbuffer()}
+
+	With(Texture{fbo.texture, gl.TEXTURE_2D}, func() {
+		gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		//gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP)
+		gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+		// automatic mipmap generation included in OpenGL v1.4
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
+		rgba := image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.Draw(rgba, rgba.Bounds(), image.NewUniform(color.RGBA{128, 128, 0, 255}), image.ZP, draw.Src)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba.Pix)
+
+		fd, err := os.Create("test.png")
+		if err != nil {
+			log.Panic("Err: ", err)
+		}
+		defer fd.Close()
+
+		png.Encode(fd, rgba)
+	})
+	//return fbo
+
+	With(Framebuffer{fbo}, func() {
+		fbo.rbo.Bind()
+		gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT, w, h)
+		fbo.rbo.Unbind()
+
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbo.texture, 0)
+
+		fbo.rbo.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER)
+
+		s := gl.CheckFramebufferStatus(gl.FRAMEBUFFER)
+		if s != gl.FRAMEBUFFER_COMPLETE {
+			log.Panic("Framebuffer issue: ", s)
+		}
+	})
+	return fbo
 }
 
 func MakeShader(shader_type gl.GLenum, source string) gl.Shader {
