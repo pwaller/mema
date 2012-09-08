@@ -64,14 +64,16 @@ func MakeText(str string, size float64) *Text {
 	}
 
 	text.id = gl.GenTexture()
-	text.id.Bind(gl.TEXTURE_2D)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, text.w, text.h, 0, gl.RGBA,
-		gl.UNSIGNED_BYTE, rgba.Pix)
+
+	With(Texture{text.id, gl.TEXTURE_2D}, func() {
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, text.w, text.h, 0, gl.RGBA,
+			gl.UNSIGNED_BYTE, rgba.Pix)
+	})
 
 	if gl.GetError() != gl.NO_ERROR {
 		text.id.Delete()
@@ -87,25 +89,8 @@ func (text *Text) destroy() {
 }
 
 func (text *Text) Draw(x, y int) {
-	defer OpenGLSentinel()()
-
 	var w, h int = text.w / 2, text.h / 2
-	var u, v, u2, v2 float32 = 0, 1, 1, 0
-	text.id.Bind(gl.TEXTURE_2D)
-
-	gl.Begin(gl.QUADS)
-
-	gl.TexCoord2f(u, v)
-	gl.Vertex2i(x, y)
-
-	gl.TexCoord2f(u2, v)
-	gl.Vertex2i(x+w, y)
-
-	gl.TexCoord2f(u2, v2)
-	gl.Vertex2i(x+w, y+h)
-
-	gl.TexCoord2f(u, v2)
-	gl.Vertex2i(x, y+h)
-
-	gl.End()
+	With(Texture{text.id, gl.TEXTURE_2D}, func() {
+		DrawQuadi(x, y, w, h)
+	})
 }
