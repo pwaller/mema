@@ -21,9 +21,22 @@
 # obsolete operating systems without proper Unicode support.
 
 REPO_PATH=$PWD
-git stash -q --keep-index --include-untracked
+git stash save -q --keep-index --include-untracked
+git stash save -q
+
+# Our state at this point:
+# * clean worktree
+# * stash@{0} contains what is to be committed
+# * stash@{1} contains everything
+
+git stash apply stash@{0} -q
+
 git_unstash() {
-	git --work-tree "$REPO_PATH" --git-dir "$REPO_PATH/.git" stash pop -q
+	G="git --work-tree \"$REPO_PATH\" --git-dir \"$REPO_PATH/.git\"" 
+	eval "$G" reset -q --hard             # Clean worktree
+	eval "$G" stash pop -q stash@{1}      # Put worktree into state before commit
+	eval "$G" reset -q stash@{0} .        # Restore index, ready for commit
+	eval "$G" stash drop -q stash@{0}     # Clean up last change to stash
 }
 trap git_unstash EXIT
 
