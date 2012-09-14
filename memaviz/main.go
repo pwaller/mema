@@ -39,9 +39,37 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
+var main_thread_work chan func() = make(chan func(), 5)
+
+type WorkType int
+
+const (
+	RenderText WorkType = iota
+	ReshapeWindow
+)
+
+var done_this_frame map[WorkType]bool = make(map[WorkType]bool)
+
+func DoneThisFrame(value WorkType) bool {
+	_, present := done_this_frame[value]
+	if !present {
+		done_this_frame[value] = true
+	}
+	return present
+}
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
+
+	go func() {
+		result := make(chan int)
+		main_thread_work <- func() {
+			log.Print("Hello from the main thread, world!")
+			result <- 42
+		}
+		log.Print("Back in other thread, ", <-result, "!")
+	}()
 
 	// Frame counter
 	go func() {
@@ -103,13 +131,10 @@ func main_loop(data *ProgramData) {
 		i -= delta
 	})
 
-	var updated_this_frame bool = false
-
 	update_text := func() {
-		if updated_this_frame {
+		if DoneThisFrame(RenderText) {
 			return
 		}
-		updated_this_frame = true
 
 		if recordtext != nil {
 			recordtext.destroy()
@@ -241,20 +266,29 @@ func main_loop(data *ProgramData) {
 			})
 		})
 
-		glfw.SwapBuffers()
 	}
 
 	done := false
 	for !done {
-		updated_this_frame = false
-
 		// TODO: Ability to modify *nfram and *nback at runtiem
 		//		 (i.e, pause and zoom functionality)
 		i += *nfram
+		done_this_frame = make(map[WorkType]bool)
 
 		Draw()
+		glfw.SwapBuffers()
 
 		//data.update <- true
+
+		// Run all work scheduled for the main thread
+		for have_work := true; have_work; {
+			select {
+			case f := <-main_thread_work:
+				f()
+			default:
+				have_work = false
+			}
+		}
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1
@@ -291,7 +325,7 @@ func main() {
 
 	data := NewProgramData(flag.Arg(0))
 
-	cleanup := make_window(400, 400, "Memory Accesses")
+	cleanup := make_window(1280, 768, "Memory Accesses")
 	defer cleanup()
 
 	main_loop(data)
