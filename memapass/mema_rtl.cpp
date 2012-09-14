@@ -4,16 +4,19 @@
 
 #include <cassert>
 #include <unordered_set>
+#include <set>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <fnmatch.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cxxabi.h>
 
 #include "lz4.h"
 
@@ -30,6 +33,8 @@ struct Flags {
   bool compression;
   // File to write memory access data to
   const char* filename;
+  // Function to instrument
+  const char* funcname;
 };
 
 static Flags mema_flags;
@@ -114,6 +119,7 @@ static void ParseFlagsFromString(Flags *f, const char *str) {
   ParseFlag(str, &f->debug, "debug");
   ParseFlag(str, &f->compression, "compression");
   ParseFlag(str, &f->filename, "filename");
+  ParseFlag(str, &f->funcname, "function");
 }
 
 void InitializeFlags(Flags *f, const char *env) {
@@ -124,6 +130,7 @@ void InitializeFlags(Flags *f, const char *env) {
   f->debug = false;
   f->compression = true;
   f->filename = NULL;
+  f->funcname = NULL;
 
   // Override from command line.
   ParseFlagsFromString(f, env);
@@ -169,6 +176,10 @@ static int memaccess_fd = -1;
 
 unsigned long total_uncompressed_size = 0;
 unsigned long total_compressed_size = 0;
+
+static bool monitor_func = false;
+static std::set<uptr> monitor_func_addresses;
+static int monitor_func_entry_count = 0;
 
 void __mema_empty_buffer() {
   // Protect against self-examination
@@ -249,8 +260,29 @@ void __mema_empty_buffer() {
 
 extern "C" {
 
+void __mema_enable()  { if (flags()->verbosity) printf("__mema_enable()\n");  flags()->disable = false; }
+void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); flags()->disable = true ; }
+
+
 void __mema_function_entry(uptr addr) {
-  if (!mema_initialized || flags()->disable) return;
+  if (!mema_initialized) return;
+
+  if (monitor_func) {
+    bool stash = flags()->disable;
+    flags()->disable = true;
+
+    if (monitor_func_addresses.count(addr) > 0) {
+      if(monitor_func_entry_count == 0) {
+          stash = false;
+          if (flags()->verbosity) printf("__mema_enable() due to function 0x%lx enter.\n", addr);
+      }
+      monitor_func_entry_count++;
+    }
+
+    flags()->disable = stash;
+  }
+
+  if (flags()->disable) return;
 
   GET_CALLER_PC_BP_SP;
   
@@ -266,7 +298,24 @@ void __mema_function_entry(uptr addr) {
 }
 
 void __mema_function_exit(uptr addr) {
-  if (!mema_initialized || flags()->disable) return;
+  if (!mema_initialized) return;
+
+  if (monitor_func) {
+    bool stash = flags()->disable;
+    flags()->disable = true;
+
+    if (monitor_func_addresses.count(addr) > 0) {
+      if (monitor_func_entry_count > 0) monitor_func_entry_count--;
+      if (monitor_func_entry_count == 0) {
+          stash = true;
+          if (flags()->verbosity) printf("__mema_disable() due to function 0x%lx exit.\n", addr);
+      }
+    }
+    
+    flags()->disable = stash;
+  }
+
+  if (flags()->disable) return;
   
   GET_CALLER_PC_BP_SP;
   
@@ -280,8 +329,6 @@ void __mema_function_exit(uptr addr) {
   }
 }
 
-void __mema_enable()  { if (flags()->verbosity) printf("__mema_enable()\n");  flags()->disable = false; }
-void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); flags()->disable = true ; }
 
 void __mema_access(uptr addr, char size, bool is_write) {
   if (!mema_initialized || flags()->disable) return;
@@ -332,6 +379,52 @@ void __mema_initialize() {
   if (!flags()->filename) {
     printf("memaccess_filename not set\n");
     return;
+  }
+  
+  if (flags()->funcname) {
+    char * command = (char*)calloc(sizeof(char), (1024+3+1));
+    command[0] = 'n';
+    command[1] = 'm';
+    command[2] = ' ';
+    int exe_len = readlink("/proc/self/exe", command + 3, 1024);
+    if (exe_len == -1) {
+        perror("cannot read executable for function name discovery");
+        return;
+    }
+    if (exe_len >= 1024) {
+        printf("executable name > 1024 chars!");
+        return;
+    }
+    printf("Executing command '%s'\n", command);
+    FILE* pipe = popen(command, "r");
+    if (pipe == NULL) {
+        perror("Failed to extract symbols from executable file");
+        return;
+    }
+    char * line = NULL;
+    size_t n;
+    while (1) {
+        int sz = getline(&line, &n, pipe);
+        if (sz == 0 or sz == -1) break;
+        line[sz-2] = '\0'; // kill newline
+
+        int status;
+        char * realname = abi::__cxa_demangle(line+19, 0, 0, &status);
+        //printf("%s demangled to %s\n", line+19, realname);
+        if (status == 0 and fnmatch(flags()->funcname, realname, 0) == 0) {
+            printf("Monitoring function '%s'\n", realname);
+            monitor_func_addresses.insert(strtol(line, 0, 16));
+        }
+        free(realname);
+        free(line);
+        line = NULL;
+    }
+    if (monitor_func_addresses.size() == 0) {
+        printf("No function matching '%s' found! Mema disabled.\n", flags()->funcname);
+        return;
+    }
+    monitor_func = true;
+    __mema_disable(); // disable mema at first
   }
   
   memaccess_fd = open(flags()->filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
