@@ -140,11 +140,11 @@ func main_loop(data *ProgramData) {
 			recordtext.destroy()
 			recordtext = nil
 		}
-		r := data.GetRecord(rec_actual)
-		if r != nil {
-			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(r.String(), 32)
-		}
+		//r := 0 //data.GetRecord(rec_actual)
+		//if r != nil {
+		//log.Print(data.records[rec_actual])
+		//recordtext = MakeText(r.String(), 32)
+		//}
 
 		for j := range stacktext {
 			stacktext[j].destroy()

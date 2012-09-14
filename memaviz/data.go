@@ -19,7 +19,6 @@ type ProgramData struct {
 	region   []MemRegion
 	blocks   []*Block
 
-	b Block
 	//update              chan<- bool
 	//new_block_available <-chan *Block
 	//request_new_block   chan<- int
@@ -28,7 +27,6 @@ type ProgramData struct {
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
 
-	data.b.full_data = data
 	/*
 		data.update := make(chan bool)
 
@@ -64,21 +62,32 @@ func NewProgramData(filename string) *ProgramData {
 
 	// TODO: Stripe across the file to find where blocks are
 	// TODO: Load on demand sections which will be read
-	data.ParseBlocks(reader)
+	new_block := make(chan *Block)
+	go data.ParseBlocks(reader, new_block)
+	go func() {
+		for b := range new_block {
+			b.full_data = data
+			b.ActiveRegionIDs()
+			main_thread_work <- func() {
+				data.blocks = append(data.blocks, b)
+			}
+		}
+	}()
 
 	//data.BlockParser(reader)
 
+	//data.b.full_data = data
 	// TODO: building the stree isn't going to work well with striping across file
-	log.Print("Loading stree.. ", len(data.b.records))
-	data.b.stack_stree = data.b.BuildStree()
-	log.Print("Loaded stree")
+	//log.Print("Loading stree.. ", len(data.b.records))
+	//data.b.stack_stree = data.b.BuildStree()
+	//log.Print("Loaded stree")
 
-	stack := (*data.b.stack_stree).Query(100, 100)
-	log.Print(" -- stree test:", stack)
+	//stack := (*data.b.stack_stree).Query(100, 100)
+	//log.Print(" -- stree test:", stack)
 
-	active_regions := data.b.ActiveRegionIDs()
+	//active_regions := data.b.ActiveRegionIDs()
 	if *verbose {
-		log.Printf("Have %d active regions", len(active_regions))
+		//log.Printf("Have %d active regions", len(active_regions))
 	}
 
 	if *debug {
@@ -142,15 +151,13 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 	}
 }
 
-func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
+func (data *ProgramData) ParseBlocks(reader *bufio.Reader, new_block chan<- *Block) {
 	// These buffers must have a maximum capacity which can fit whatever we 
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
 	input := make([]byte, 0, 20*1024*1024)
 	round_1 := make([]byte, 1, 20*1024*1024)
 	round_2 := make([]byte, 1, 20*1024*1024)
-
-	block := &data.b
 
 	for {
 		var block_size int64
@@ -171,45 +178,50 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 		n, err := io.ReadFull(r, input)
 
 		if int64(n) != block_size {
-			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
+			//log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
+			break
 		}
 		clz4.LZ4_uncompress_unknownOutputSize(input, &round_1)
 		clz4.LZ4_uncompress_unknownOutputSize(round_1, &round_2)
 
-		var records Records
-		records.FromBytes(round_2)
-		block.records = append(block.records, records...)
-		block.nrecords += int64(len(records))
+		block := &Block{}
 
-		// Read only a limited number of records > nrec, if set.
-		if *nrec != 0 && int64(block.nrecords) > *nrec {
-			break
-		}
+		block.records.FromBytes(round_2)
+		block.nrecords += int64(len(block.records))
+
+		new_block <- block
 	}
-	log.Print("Total records: ", block.nrecords)
+	//log.Print("Total records: ", block.nrecords)
 }
 
-func (d *ProgramData) RegionID(addr uint64) int {
-	for i := range d.region {
-		if d.region[i].low < addr && addr < d.region[i].hi {
+func (data *ProgramData) RegionID(addr uint64) int {
+	for i := range data.region {
+		if data.region[i].low < addr && addr < data.region[i].hi {
 			return i
 		}
 	}
 	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
-	return len(d.region)
+	return len(data.region)
 }
 
-func (d *ProgramData) Draw(start_index, n int64) {
-	d.b.Draw(start_index, n)
+func (data *ProgramData) Draw(start_index, n int64) {
+	for i, b := range data.blocks {
+		b.Draw(start_index+int64(i)*(10*1024*1024/64), n)
+		if i > 3 {
+			break
+		}
+	}
 }
 
-func (d *ProgramData) GetRecord(i int64) *Record {
-	if i >= 0 && i < d.b.nrecords {
-		return &d.b.records[i]
+func (data *ProgramData) GetRecord(i int64) *Record {
+	if i >= 0 && i < data.blocks[0].nrecords {
+		return &data.blocks[0].records[i]
 	}
 	return nil
 }
 
-func (d *ProgramData) GetStackNames(i int64) []string {
-	return d.b.GetStackNames(i)
+func (data *ProgramData) GetStackNames(i int64) []string {
+	return []string{}
+	// TODO
+	return data.blocks[0].GetStackNames(i)
 }
