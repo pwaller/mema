@@ -167,8 +167,8 @@ static const MemAccess * first_mem_access = &mem_accesses[0],
 
 static int memaccess_fd = -1;
 
-unsigned int total_uncompressed_size = 0;
-unsigned int total_compressed_size = 0;
+unsigned long total_uncompressed_size = 0;
+unsigned long total_compressed_size = 0;
 
 void __mema_empty_buffer() {
   // Protect against self-examination
@@ -315,8 +315,8 @@ void __mema_finalize() {
   __mema_empty_buffer();
   if (memaccess_fd != -1)
     close(memaccess_fd);
-  printf("Total bytes written (compressed)  : %i\n", total_compressed_size);
-  printf("Total bytes written (uncompressed): %i\n", total_uncompressed_size);
+  printf("Total bytes written (compressed)  : %li\n", total_compressed_size);
+  printf("Total bytes written (uncompressed): %li\n", total_uncompressed_size);
 }
 
 void __mema_initialize() {
