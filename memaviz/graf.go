@@ -153,6 +153,10 @@ func MouseToProj(x, y int) (float64, float64) {
 }
 
 func Reshape(width, height int) {
+	if DoneThisFrame(ReshapeWindow) {
+		return
+	}
+
 	gl.Viewport(0, 0, width, height)
 
 	gl.MatrixMode(gl.PROJECTION)
@@ -165,7 +169,9 @@ func Reshape(width, height int) {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	if Draw != nil {
+		gl.DrawBuffer(gl.FRONT_AND_BACK)
 		Draw()
+		gl.DrawBuffer(gl.BACK)
 	}
 }
 
