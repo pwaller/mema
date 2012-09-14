@@ -38,8 +38,8 @@ func (d *Block) BuildStree() *stree.Tree {
 }
 
 // Returns the stack frame for a given record id
-func (d *Block) GetStack(record int64) []*Record {
-	intervals := (*d.stack_stree).Query(int(record), int(record))
+func (block *Block) GetStack(record int64) []*Record {
+	intervals := (*block.stack_stree).Query(int(record), int(record))
 	entry_indices := make([]int, len(intervals))
 	for i := range intervals {
 		entry_indices[i] = intervals[i].Segment.From
@@ -47,18 +47,18 @@ func (d *Block) GetStack(record int64) []*Record {
 	sort.Ints(entry_indices)
 	result := make([]*Record, len(intervals))
 	for i := range entry_indices {
-		result[i] = &d.records[entry_indices[i]]
+		result[i] = &block.records[entry_indices[i]]
 	}
 
 	return result
 }
 
-func (d *Block) GetStackNames(record int64) []string {
-	stack := d.GetStack(record)
+func (block *Block) GetStackNames(record int64) []string {
+	stack := block.GetStack(record)
 	result := make([]string, len(stack))
 	for i := range stack {
 		f := stack[i].FunctionCall()
-		result[i] = d.GetSymbol(f.FuncPointer)
+		result[i] = block.GetSymbol(f.FuncPointer)
 	}
 	return result
 }

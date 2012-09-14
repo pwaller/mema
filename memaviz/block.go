@@ -23,18 +23,18 @@ type Block struct {
 	// Texture
 }
 
-func (d *Block) ActiveRegionIDs() []int {
+func (block *Block) ActiveRegionIDs() []int {
 	// TODO: Quite a bite of this wants to be moved into NewProgramData
 	active := make(map[int]bool)
 	page_activity := make(map[uint64]uint)
 
-	for i := range d.records {
-		r := &d.records[i]
+	for i := range block.records {
+		r := &block.records[i]
 		if r.Type != MEMA_ACCESS {
 			continue
 		}
 		a := r.MemAccess()
-		active[d.full_data.RegionID(a.Addr)] = true
+		active[block.full_data.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 
 		page_activity[page]++
@@ -53,28 +53,28 @@ func (d *Block) ActiveRegionIDs() []int {
 		}
 	}
 
-	d.quiet_pages = make(map[uint64]bool)
-	d.active_pages = make(map[uint64]bool)
-	d.n_pages_to_left = make(map[uint64]uint64)
-	d.n_inactive_to_left = make(map[uint64]uint64)
+	block.quiet_pages = make(map[uint64]bool)
+	block.active_pages = make(map[uint64]bool)
+	block.n_pages_to_left = make(map[uint64]uint64)
+	block.n_inactive_to_left = make(map[uint64]uint64)
 
 	// Populate the "quiet pages" map (less than 1% of the activity of the 
 	// most active page)
 	for page, value := range page_activity {
 		if *hide_qp_fraction != 0 &&
 			value < highest_page_activity / *hide_qp_fraction {
-			d.quiet_pages[page] = true
+			block.quiet_pages[page] = true
 			continue
 		}
-		d.active_pages[page] = true
+		block.active_pages[page] = true
 	}
 
-	log.Print("Quiet pages: ", len(d.quiet_pages), " active: ", len(d.active_pages))
+	log.Print("Quiet pages: ", len(block.quiet_pages), " active: ", len(block.active_pages))
 
 	// Build list of pages which are active, count active pages to the left
-	active_pages := make([]uint64, len(d.active_pages))
+	active_pages := make([]uint64, len(block.active_pages))
 	i := 0
-	for page := range d.active_pages {
+	for page := range block.active_pages {
 		active_pages[i] = page
 		i++
 	}
@@ -82,7 +82,7 @@ func (d *Block) ActiveRegionIDs() []int {
 
 	for i := range active_pages {
 		page := active_pages[i]
-		d.n_pages_to_left[page] = uint64(i)
+		block.n_pages_to_left[page] = uint64(i)
 	}
 
 	var total_inactive_to_left uint64 = 0
@@ -95,16 +95,16 @@ func (d *Block) ActiveRegionIDs() []int {
 			inactive_to_left = active_pages[i] - active_pages[i-1]
 		}
 		total_inactive_to_left += inactive_to_left - 1
-		d.n_inactive_to_left[p] = total_inactive_to_left
+		block.n_inactive_to_left[p] = total_inactive_to_left
 	}
 
 	return result
 }
 
-func (data *Block) Draw(start, N int64) bool {
+func (block *Block) Draw(start, N int64) bool {
 	defer OpenGLSentinel()()
 
-	width := uint64(len(data.active_pages)) * *PAGE_SIZE
+	width := uint64(len(block.active_pages)) * *PAGE_SIZE
 	if width == 0 {
 		width = 1
 	}
@@ -133,10 +133,10 @@ func (data *Block) Draw(start, N int64) bool {
 
 	gl.LineWidth(1)
 
-	if cap(data.vertex_data) == 0 {
+	if cap(block.vertex_data) == 0 {
 		log.Print("start = ", start)
-		data.vertex_data = make([]*ColorVertices, 1)
-		data.vertex_data[0] = data.GetAccessVertexData(0, int64(data.nrecords))
+		block.vertex_data = make([]*ColorVertices, 1)
+		block.vertex_data[0] = block.GetAccessVertexData(0, int64(block.nrecords))
 	}
 
 	With(Matrix{gl.MODELVIEW}, func() {
@@ -144,10 +144,10 @@ func (data *Block) Draw(start, N int64) bool {
 		gl.Scaled(1, 4/float64(*nback), 1)
 		gl.Translated(0, -float64(start), 0)
 
-		data.vertex_data[0].DrawPartial(start, *nback)
+		block.vertex_data[0].DrawPartial(start, *nback)
 	})
 
-	NV := int64(len(*data.vertex_data[0]))
+	NV := int64(len(*block.vertex_data[0]))
 
 	var eolmarker ColorVertices
 
@@ -167,9 +167,9 @@ func (data *Block) Draw(start, N int64) bool {
 	return start > NV //int64(data.nrecords)
 }
 
-func (data *Block) GetAccessVertexData(start, N int64) *ColorVertices {
+func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 
-	width := uint64(len(data.active_pages)) * *PAGE_SIZE
+	width := uint64(len(block.active_pages)) * *PAGE_SIZE
 
 	vc := &ColorVertices{}
 
@@ -178,12 +178,12 @@ func (data *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 	// 		OTOH, this might not be supported on older cards
 	var stack_depth int
 
-	for pos := start; pos < min(start+N, int64(data.nrecords)); pos++ {
+	for pos := start; pos < min(start+N, int64(block.nrecords)); pos++ {
 		if pos < 0 {
 			continue
 		}
 
-		r := &data.records[pos]
+		r := &block.records[pos]
 		if r.Type == MEMA_ACCESS {
 			// take it
 		} else if r.Type == MEMA_FUNC_ENTER {
@@ -209,11 +209,11 @@ func (data *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 		a := r.MemAccess()
 
 		page := a.Addr / *PAGE_SIZE
-		if _, present := data.quiet_pages[page]; present {
+		if _, present := block.quiet_pages[page]; present {
 			continue
 		}
 
-		x := float32((a.Addr - data.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
+		x := float32((a.Addr - block.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
 		x = (x - 0.5) * 4
 
 		if x > 4 || x < -4 {
