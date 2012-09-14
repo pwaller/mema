@@ -39,9 +39,20 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
+var main_thread_work chan func() = make(chan func(), 5)
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
+
+	go func() {
+		result := make(chan int)
+		main_thread_work <- func() {
+			log.Print("Hello from the main thread, world!")
+			result <- 42
+		}
+		log.Print("Back in other thread, ", <-result, "!")
+	}()
 
 	// Frame counter
 	go func() {
@@ -254,7 +265,15 @@ func main_loop(data *ProgramData) {
 
 		Draw()
 
-		//data.update <- true
+		// Run all work scheduled for the main thread
+		for have_work := true; have_work; {
+			select {
+			case f := <-main_thread_work:
+				f()
+			default:
+				have_work = false
+			}
+		}
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1
