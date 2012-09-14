@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/banthar/gl"
+	"github.com/pwaller/go-clz4"
 	"github.com/toberndo/go-stree/stree"
 )
 
@@ -190,8 +191,8 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 		if int64(n) != block_size {
 			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
 		}
-		LZ4_uncompress_unknownOutputSize(input, &round_1)
-		LZ4_uncompress_unknownOutputSize(round_1, &round_2)
+		clz4.LZ4_uncompress_unknownOutputSize(input, &round_1)
+		clz4.LZ4_uncompress_unknownOutputSize(round_1, &round_2)
 
 		var records Records
 		records.FromBytes(round_2)
