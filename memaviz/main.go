@@ -140,15 +140,16 @@ func main_loop(data *ProgramData) {
 			recordtext.destroy()
 			recordtext = nil
 		}
-		if rec_actual > 0 && rec_actual < data.b.nrecords {
+		r := data.GetRecord(rec_actual)
+		if r != nil {
 			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(data.b.records[rec_actual].String(), 32)
+			recordtext = MakeText(r.String(), 32)
 		}
 
 		for j := range stacktext {
 			stacktext[j].destroy()
 		}
-		stack := data.b.GetStackNames(rec_actual)
+		stack := data.GetStackNames(rec_actual)
 		stacktext = make([]*Text, len(stack))
 		for j := range stack {
 			stacktext[j] = MakeText(stack[j], 32)
@@ -163,9 +164,8 @@ func main_loop(data *ProgramData) {
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
 
-				if rec_actual > 0 && rec_actual < data.b.nrecords {
-					r := data.b.records[rec_actual]
-
+				r := data.GetRecord(rec_actual)
+				if r != nil {
 					if r.Type == MEMA_ACCESS {
 						log.Print(r)
 						ma := r.MemAccess()
@@ -225,10 +225,7 @@ func main_loop(data *ProgramData) {
 
 		// Draw the memory access/function data
 		gl.PointSize(2)
-		wrapped := data.b.Draw(i, *nback)
-		if wrapped {
-			i = -int64(*nback)
-		}
+		data.Draw(i, *nback)
 
 		// Draw the mouse point
 		With(Matrix{gl.MODELVIEW}, func() {

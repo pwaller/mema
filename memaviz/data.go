@@ -198,3 +198,18 @@ func (d *ProgramData) RegionID(addr uint64) int {
 	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
 	return len(d.region)
 }
+
+func (d *ProgramData) Draw(start_index, n int64) {
+	d.b.Draw(start_index, n)
+}
+
+func (d *ProgramData) GetRecord(i int64) *Record {
+	if i >= 0 && i < d.b.nrecords {
+		return &d.b.records[i]
+	}
+	return nil
+}
+
+func (d *ProgramData) GetStackNames(i int64) []string {
+	return d.b.GetStackNames(i)
+}
