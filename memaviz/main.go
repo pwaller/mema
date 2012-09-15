@@ -17,7 +17,6 @@ import (
 
 var nrec = flag.Int64("nrec", 0, "number of records to read")
 
-var nfram = flag.Int64("nfram", 100, "number of records to jump per frame")
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -268,9 +267,6 @@ func main_loop(data *ProgramData) {
 
 	done := false
 	for !done {
-		// TODO: Ability to modify *nfram and *nback at runtiem
-		//		 (i.e, pause and zoom functionality)
-		i += *nfram
 		done_this_frame = make(map[WorkType]bool)
 
 		Draw()
