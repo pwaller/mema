@@ -61,7 +61,7 @@ func (block *Block) ActiveRegionIDs() {
 		block.active_pages[page] = true
 	}
 
-	log.Print("Quiet pages: ", len(block.quiet_pages), " active: ", len(block.active_pages))
+	//log.Print("Quiet pages: ", len(block.quiet_pages), " active: ", len(block.active_pages))
 
 	// Build list of pages which are active, count active pages to the left
 	active_pages := make([]uint64, len(block.active_pages))
