@@ -40,6 +40,18 @@ var Draw func() = nil
 
 var main_thread_work chan func() = make(chan func(), 100)
 
+func DoMainThreadWork() {
+	// Run all work scheduled for the main thread
+	for have_work := true; have_work; {
+		select {
+		case f := <-main_thread_work:
+			f()
+		default:
+			have_work = false
+		}
+	}
+}
+
 type WorkType int
 
 const (
@@ -272,15 +284,7 @@ func main_loop(data *ProgramData) {
 		Draw()
 		glfw.SwapBuffers()
 
-		// Run all work scheduled for the main thread
-		for have_work := true; have_work; {
-			select {
-			case f := <-main_thread_work:
-				f()
-			default:
-				have_work = false
-			}
-		}
+		DoMainThreadWork()
 
 		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1
