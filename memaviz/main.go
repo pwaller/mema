@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -79,9 +80,12 @@ func main_loop(data *ProgramData) {
 		for {
 			time.Sleep(time.Second)
 			if *verbose {
+				memstats := new(runtime.MemStats)
+				runtime.ReadMemStats(memstats)
 				fps := float64(frames) / time.Since(start).Seconds()
-				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB",
-					fps, len(data.blocks), SpareRAM())
+				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB; alloc'd = %6d; (+footprint = %6d)",
+					fps, len(data.blocks), SpareRAM(), memstats.HeapAlloc/1024/1024,
+					(memstats.Sys-memstats.HeapAlloc)/1024/1024)
 			}
 			start = time.Now()
 			frames = 0
