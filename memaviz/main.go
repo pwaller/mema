@@ -94,6 +94,17 @@ func main_loop(data *ProgramData) {
 		}
 	}()
 
+	// Necessary at the moment to prevent eventual OOM
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			if *verbose {
+				log.Print("GC()")
+			}
+			runtime.GC()
+		}
+	}()
+
 	var i int64 = -int64(*nback)
 
 	text := MakeText(data.filename, 32)
