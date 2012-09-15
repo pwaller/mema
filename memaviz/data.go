@@ -67,8 +67,17 @@ func NewProgramData(filename string) *ProgramData {
 	new_block := make(chan *Block)
 	go data.ParseBlocks(reader, new_block)
 	go func() {
+		current_context := make(Records, 0)
+		i := 0
 		for b := range new_block {
 			b.full_data = data
+			b.context_records = current_context
+			b.stack_stree, current_context = b.BuildStree()
+			if i == 1 {
+				stack := (*b.stack_stree).Query(100, 100)
+				log.Print(" -- stree test:", stack)
+			}
+			i += 1
 			b.ActiveRegionIDs()
 
 			main_thread_work <- func(b *Block) func() {
@@ -247,7 +256,11 @@ func (data *ProgramData) GetRecord(i int64) *Record {
 }
 
 func (data *ProgramData) GetStackNames(i int64) []string {
-	// TODO: Fix this
+	records_per_block := (int64)(10 * 1024 * 1024 / 56)
+	block_index := i / records_per_block
+	internal_index := i % records_per_block
+	if block_index >= 0 && block_index < int64(len(data.blocks)) {
+		return data.blocks[block_index].GetStackNames(internal_index)
+	}
 	return []string{}
-	return data.blocks[0].GetStackNames(i)
 }

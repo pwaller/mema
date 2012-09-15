@@ -9,9 +9,10 @@ import (
 )
 
 type Block struct {
-	nrecords    int64
-	records     Records
-	vertex_data []*ColorVertices
+	nrecords        int64
+	records         Records
+	context_records Records
+	vertex_data     []*ColorVertices
 
 	quiet_pages        map[uint64]bool
 	active_pages       map[uint64]bool
@@ -169,7 +170,7 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//	   Function calls here appear to be the biggest bottleneck
 	// 		OTOH, this might not be supported on older cards
-	var stack_depth int
+	var stack_depth int = len(block.context_records)
 
 	for pos := start; pos < min(start+N, int64(block.nrecords)); pos++ {
 		if pos < 0 {
