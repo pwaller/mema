@@ -108,12 +108,15 @@ func (block *Block) Draw(start, N int64) bool {
 		var vc ColorVertices
 		boundary_color := Color{64, 64, 64, 255}
 
-		if width / *PAGE_SIZE < 1000 { // If we try and draw too many of these, X will hang
-			for p := uint64(0); p < width; p += *PAGE_SIZE {
+		ytop := -2 + 4*float32(0-start)/float32(*nback)
+		ybot := -2 + 4*float32(N-start)/float32(*nback)
+
+		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
+			for p := uint64(0); p <= width+*PAGE_SIZE; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				vc.Add(ColorVertex{boundary_color, Vertex{x, -2}})
-				vc.Add(ColorVertex{boundary_color, Vertex{x, 2}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x, ybot}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x, ytop}})
 			}
 		}
 
@@ -143,13 +146,11 @@ func (block *Block) Draw(start, N int64) bool {
 
 	var eolmarker ColorVertices
 
-	// End-of-data marker
-	if start+N > NV {
-		y := -2 + 4*float32(NV-start)/float32(*nback)
-		c := Color{255, 255, 255, 255}
-		eolmarker.Add(ColorVertex{c, Vertex{-2, y}})
-		eolmarker.Add(ColorVertex{c, Vertex{2, y}})
-	}
+	// End-of-block marker
+	y := -2 + 4*float32(NV-start)/float32(*nback)
+	c := Color{255, 255, 255, 255}
+	eolmarker.Add(ColorVertex{c, Vertex{-2, y}})
+	eolmarker.Add(ColorVertex{c, Vertex{2, y}})
 
 	OpenGLSentinel()
 
