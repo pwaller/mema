@@ -20,6 +20,8 @@ var nrec = flag.Int64("nrec", 0, "number of records to read")
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "", "write mem profile to file")
+
 var verbose = flag.Bool("verbose", false, "Verbose")
 var debug = flag.Bool("debug", false, "Turn on debugging")
 var vsync = flag.Bool("vsync", true, "set to false to disable vsync")
@@ -38,6 +40,7 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
+// 100 = it's possible to schedule 100 actions per frame
 var main_thread_work chan func() = make(chan func(), 100)
 
 func DoMainThreadWork() {
@@ -73,15 +76,6 @@ func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
 
-	go func() {
-		result := make(chan int)
-		main_thread_work <- func() {
-			log.Print("Hello from the main thread, world!")
-			result <- 42
-		}
-		log.Print("Back in other thread, ", <-result, "!")
-	}()
-
 	// Frame counter
 	go func() {
 		for {
@@ -94,9 +88,6 @@ func main_loop(data *ProgramData) {
 			frames = 0
 		}
 	}()
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
 
 	var i int64 = -int64(*nback)
 
@@ -112,10 +103,9 @@ func main_loop(data *ProgramData) {
 	var mousex, mousey, mousedownx, mousedowny int
 	var mousepx, mousepy float64
 	var lbutton bool
+	escape_hit := false
 
 	glfw.SetMouseWheelCallback(func(pos int) {
-		// return
-		// TODO: make this work
 		nback_prev := *nback
 		if pos < 0 {
 			*nback = 40 * 1024 << uint(-pos)
@@ -231,6 +221,13 @@ func main_loop(data *ProgramData) {
 		update_text()
 	})
 
+	glfw.SetKeyCallback(func(key, state int) {
+		switch key {
+		case glfw.KeyEsc:
+			escape_hit = true
+		}
+	})
+
 	Draw = func() {
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -277,6 +274,14 @@ func main_loop(data *ProgramData) {
 
 	}
 
+	interrupt := make(chan os.Signal)
+	signal.Notify(interrupt, os.Interrupt)
+	ctrlc_hit := false
+	go func() {
+		<-interrupt
+		ctrlc_hit = true
+	}()
+
 	done := false
 	for !done {
 		done_this_frame = make(map[WorkType]bool)
@@ -286,23 +291,12 @@ func main_loop(data *ProgramData) {
 
 		DoMainThreadWork()
 
-		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
+		done = ctrlc_hit || escape_hit || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1
-		// Check for ctrl-c
-		select {
-		case <-interrupt:
-			done = true
-		default:
-		}
 	}
 }
 
-func main() {
-	flag.Parse()
-
-	if flag.NArg() != 1 {
-		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
-	}
+func InitProfiling() {
 
 	if *cpuprofile != "" {
 		log.Print("Profiling to ", *cpuprofile)
@@ -313,6 +307,21 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
+
+	if *memprofile != "" {
+		panic("memprofile unimplemented")
+		// todo: maybe start a goroutine which writes a profile every N seconds
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	if flag.NArg() != 1 {
+		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
+	}
+
+	InitProfiling()
 
 	if *verbose {
 		log.Print("Startup")
