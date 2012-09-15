@@ -23,9 +23,7 @@ type Block struct {
 	// Texture
 }
 
-func (block *Block) ActiveRegionIDs() []int {
-	// TODO: Quite a bite of this wants to be moved into NewProgramData
-	active := make(map[int]bool)
+func (block *Block) ActiveRegionIDs() {
 	page_activity := make(map[uint64]uint)
 
 	for i := range block.records {
@@ -34,16 +32,10 @@ func (block *Block) ActiveRegionIDs() []int {
 			continue
 		}
 		a := r.MemAccess()
-		active[block.full_data.RegionID(a.Addr)] = true
 		page := a.Addr / *PAGE_SIZE
 
 		page_activity[page]++
 	}
-	result := make([]int, 0)
-	for k := range active {
-		result = append(result, k)
-	}
-	sort.Ints(result)
 
 	// Figure out how much activity the busiest page has
 	var highest_page_activity uint = 0
@@ -98,7 +90,7 @@ func (block *Block) ActiveRegionIDs() []int {
 		block.n_inactive_to_left[p] = total_inactive_to_left
 	}
 
-	return result
+	//return result
 }
 
 func (block *Block) Draw(start, N int64) bool {
@@ -134,7 +126,7 @@ func (block *Block) Draw(start, N int64) bool {
 	gl.LineWidth(1)
 
 	if cap(block.vertex_data) == 0 {
-		log.Print("start = ", start)
+		//log.Print("start = ", start)
 		block.vertex_data = make([]*ColorVertices, 1)
 		block.vertex_data[0] = block.GetAccessVertexData(0, int64(block.nrecords))
 	}
@@ -217,7 +209,7 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 		x = (x - 0.5) * 4
 
 		if x > 4 || x < -4 {
-			log.Panic("x has unexpected value: ", x)
+			//log.Panic("x has unexpected value: ", x)
 		}
 
 		y := float32(int64(len(*vc)) - start)

@@ -37,6 +37,21 @@ func RecordSize() int {
 
 type Records []Record
 
+func (records *Records) Ptr() uintptr {
+	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
+	return records_header.Data
+}
+
+func (records *Records) AsBytes() *[]byte {
+	result := new([]byte)
+	records_header := (*reflect.SliceHeader)(unsafe.Pointer(records))
+	result_header := (*reflect.SliceHeader)(unsafe.Pointer(result))
+	result_header.Data = records_header.Data
+	result_header.Len = len(*records) * int(unsafe.Sizeof((*records)[0]))
+	result_header.Cap = result_header.Len
+	return result
+}
+
 func (records *Records) FromBytes(bslice []byte) {
 	if (len(bslice) % RecordSize()) != 0 {
 		log.Panic("Unexpectedly have some bytes left over.. n=",

@@ -39,7 +39,7 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
-var main_thread_work chan func() = make(chan func(), 5)
+var main_thread_work chan func() = make(chan func(), 100)
 
 type WorkType int
 
@@ -77,6 +77,7 @@ func main_loop(data *ProgramData) {
 			time.Sleep(time.Second)
 			if *verbose {
 				log.Print("fps = ", float64(frames)/time.Since(start).Seconds())
+				log.Print("Number of blocks: ", len(data.blocks))
 			}
 			start = time.Now()
 			frames = 0

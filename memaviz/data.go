@@ -50,7 +50,7 @@ func NewProgramData(filename string) *ProgramData {
 	data.filename = filename
 
 	fd, err := os.Open(filename)
-	defer fd.Close()
+	//defer fd.Close()
 	if err != nil {
 		log.Panic("Fatal error: ", err)
 	}
@@ -70,6 +70,7 @@ func NewProgramData(filename string) *ProgramData {
 			b.ActiveRegionIDs()
 			main_thread_work <- func() {
 				data.blocks = append(data.blocks, b)
+				log.Print("n records = ", len(b.records))
 			}
 		}
 	}()
@@ -110,7 +111,7 @@ func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
 	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
 }
 
-func (data *ProgramData) ParseHeader(reader *bufio.Reader) {
+func (data *ProgramData) ParseHeader(reader io.Reader) {
 	magic_buf := make([]byte, 8)
 	_, err := reader.Read(magic_buf)
 	if err != nil || string(magic_buf) != "MEMACCES" {
@@ -151,15 +152,17 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 	}
 }
 
-func (data *ProgramData) ParseBlocks(reader *bufio.Reader, new_block chan<- *Block) {
+func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) {
 	// These buffers must have a maximum capacity which can fit whatever we 
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
-	input := make([]byte, 0, 20*1024*1024)
-	round_1 := make([]byte, 1, 20*1024*1024)
-	round_2 := make([]byte, 1, 20*1024*1024)
+
+	ptrmap := make(map[uintptr]bool)
+
+	blocks := int64(0)
 
 	for {
+		blocks++
 		var block_size int64
 		err := binary.Read(reader, binary.LittleEndian, &block_size)
 		if err == io.EOF {
@@ -173,20 +176,27 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader, new_block chan<- *Blo
 			log.Print("Reading block with size: ", block_size)
 		}
 
-		r := io.LimitReader(reader, block_size)
+		input := make([]byte, 0, 10*1024*1024)
+		round_1 := make([]byte, 1, 10*1024*1024)
+		//round_2 := make([]byte, 1, 10*1024*1024)
+
 		input = input[0:block_size]
-		n, err := io.ReadFull(r, input)
+		n, err := io.ReadFull(reader, input)
 
 		if int64(n) != block_size {
-			//log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
-			break
+			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
 		}
 		clz4.LZ4_uncompress_unknownOutputSize(input, &round_1)
-		clz4.LZ4_uncompress_unknownOutputSize(round_1, &round_2)
 
 		block := &Block{}
+		block.records = make(Records, 10*1024*1024/56)
+		if _, present := ptrmap[block.records.Ptr()]; present {
+			log.Panic("Encountered second one! ", blocks)
+		}
+		ptrmap[block.records.Ptr()] = true
+		clz4.LZ4_uncompress_unknownOutputSize(round_1, block.records.AsBytes()) //&round_2)		
 
-		block.records.FromBytes(round_2)
+		//block.records.FromBytes(round_2)
 		block.nrecords += int64(len(block.records))
 
 		new_block <- block
@@ -206,10 +216,10 @@ func (data *ProgramData) RegionID(addr uint64) int {
 
 func (data *ProgramData) Draw(start_index, n int64) {
 	for i, b := range data.blocks {
-		b.Draw(start_index+int64(i)*(10*1024*1024/64), n)
-		if i > 3 {
-			break
-		}
+		b.Draw(start_index+int64(i)*b.nrecords, b.nrecords)
+		//if i > 100 {
+		//break
+		//}
 	}
 }
 
