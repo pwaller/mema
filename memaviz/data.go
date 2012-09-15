@@ -240,10 +240,10 @@ func (data *ProgramData) RegionID(addr uint64) int {
 
 func (data *ProgramData) Draw(start_index, n int64) {
 	for i, b := range data.blocks {
-		b.Draw(start_index+int64(i)*b.nrecords, b.nrecords)
-		//if i > 100 {
-		//break
-		//}
+		b.Draw(start_index-int64(i)*b.nrecords, b.nrecords)
+		if i > 50 {
+			break
+		}
 	}
 }
 
