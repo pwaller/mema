@@ -9,16 +9,18 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/pprof"
 	"time"
 
 	"github.com/banthar/gl"
 	"github.com/jteeuwen/glfw"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var profiling = flag.Bool("prof", false, "enable profiling")
 var memprofile = flag.String("memprofile", "", "write mem profile to file")
 
 var verbose = flag.Bool("verbose", false, "Verbose")
@@ -299,24 +301,6 @@ func main_loop(data *ProgramData) {
 	}
 }
 
-func InitProfiling() {
-
-	if *cpuprofile != "" {
-		log.Print("Profiling to ", *cpuprofile)
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	if *memprofile != "" {
-		panic("memprofile unimplemented")
-		// todo: maybe start a goroutine which writes a profile every N seconds
-	}
-}
-
 func main() {
 	flag.Parse()
 
@@ -324,7 +308,9 @@ func main() {
 		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
 	}
 
-	InitProfiling()
+	if *profiling {
+		go func() { http.ListenAndServe(":6060", nil) }()
+	}
 
 	if *verbose {
 		log.Print("Startup")
