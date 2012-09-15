@@ -81,8 +81,9 @@ func main_loop(data *ProgramData) {
 		for {
 			time.Sleep(time.Second)
 			if *verbose {
-				log.Print("fps = ", float64(frames)/time.Since(start).Seconds())
-				log.Print("Number of blocks: ", len(data.blocks))
+				fps := float64(frames) / time.Since(start).Seconds()
+				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB",
+					fps, len(data.blocks), SpareRAM())
 			}
 			start = time.Now()
 			frames = 0

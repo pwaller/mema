@@ -105,16 +105,6 @@ func NewProgramData(filename string) *ProgramData {
 	return data
 }
 
-func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
-	for i := range data.region {
-		r := &data.region[i]
-		if r.low <= addr && addr < r.hi {
-			return r
-		}
-	}
-	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
-}
-
 func (data *ProgramData) ParseHeader(reader io.Reader) {
 	magic_buf := make([]byte, 8)
 	_, err := reader.Read(magic_buf)
@@ -214,31 +204,32 @@ func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) 
 		if int64(n) != block_size {
 			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
 		}
+		// TODO: use known output size decompression
 		clz4.LZ4_uncompress_unknownOutputSize(input, &round_1)
 
 		block := &Block{}
-		block.records = make(Records, 10*1024*1024/56)
-		clz4.LZ4_uncompress_unknownOutputSize(round_1, block.records.AsBytes()) //&round_2)		
 
-		//block.records.FromBytes(round_2)
+		block.records = make(Records, 10*1024*1024/56)
+		clz4.LZ4_uncompress_unknownOutputSize(round_1, block.records.AsBytes())
 		block.nrecords += int64(len(block.records))
 
 		new_block <- block
 	}
-	//log.Print("Total records: ", block.nrecords)
 }
 
-func (data *ProgramData) RegionID(addr uint64) int {
+func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
+	// TODO: More efficient implementation
 	for i := range data.region {
-		if data.region[i].low < addr && addr < data.region[i].hi {
-			return i
+		r := &data.region[i]
+		if r.low <= addr && addr < r.hi {
+			return r
 		}
 	}
-	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
-	return len(data.region)
+	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
 }
 
 func (data *ProgramData) Draw(start_index, n int64) {
+	// TODO: determine blocks which are visible on screen
 	for i, b := range data.blocks {
 		b.Draw(start_index-int64(i)*b.nrecords, b.nrecords)
 		if i > 50 {
@@ -248,6 +239,7 @@ func (data *ProgramData) Draw(start_index, n int64) {
 }
 
 func (data *ProgramData) GetRecord(i int64) *Record {
+	// TODO: determine block from `i`
 	if i >= 0 && i < data.blocks[0].nrecords {
 		return &data.blocks[0].records[i]
 	}
@@ -255,7 +247,7 @@ func (data *ProgramData) GetRecord(i int64) *Record {
 }
 
 func (data *ProgramData) GetStackNames(i int64) []string {
+	// TODO: Fix this
 	return []string{}
-	// TODO
 	return data.blocks[0].GetStackNames(i)
 }
