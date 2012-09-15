@@ -15,8 +15,6 @@ import (
 	"github.com/jteeuwen/glfw"
 )
 
-var nrec = flag.Int64("nrec", 0, "number of records to read")
-
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
