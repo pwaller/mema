@@ -68,10 +68,12 @@ func NewProgramData(filename string) *ProgramData {
 		for b := range new_block {
 			b.full_data = data
 			b.ActiveRegionIDs()
-			main_thread_work <- func() {
-				data.blocks = append(data.blocks, b)
-				log.Print("n records = ", len(b.records))
-			}
+
+			main_thread_work <- func(b *Block) func() {
+				return func() {
+					data.blocks = append(data.blocks, b)
+				}
+			}(b)
 		}
 	}()
 
@@ -157,9 +159,9 @@ func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) 
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
 
-	ptrmap := make(map[uintptr]bool)
-
 	blocks := int64(0)
+	input := make([]byte, 0, 10*1024*1024)
+	round_1 := make([]byte, 1, 10*1024*1024)
 
 	for {
 		blocks++
@@ -176,10 +178,6 @@ func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) 
 			log.Print("Reading block with size: ", block_size)
 		}
 
-		input := make([]byte, 0, 10*1024*1024)
-		round_1 := make([]byte, 1, 10*1024*1024)
-		//round_2 := make([]byte, 1, 10*1024*1024)
-
 		input = input[0:block_size]
 		n, err := io.ReadFull(reader, input)
 
@@ -190,10 +188,6 @@ func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) 
 
 		block := &Block{}
 		block.records = make(Records, 10*1024*1024/56)
-		if _, present := ptrmap[block.records.Ptr()]; present {
-			log.Panic("Encountered second one! ", blocks)
-		}
-		ptrmap[block.records.Ptr()] = true
 		clz4.LZ4_uncompress_unknownOutputSize(round_1, block.records.AsBytes()) //&round_2)		
 
 		//block.records.FromBytes(round_2)
