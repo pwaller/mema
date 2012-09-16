@@ -37,7 +37,7 @@ type ColorVertex struct {
 }
 type ColorVertices []ColorVertex
 
-func (vcs ColorVertices) Draw() {
+func (vcs ColorVertices) Draw(primitives gl.GLenum) {
 	if len(vcs) < 1 {
 		return
 	}
@@ -46,14 +46,13 @@ func (vcs ColorVertices) Draw() {
 	defer gl.PopClientAttrib()
 
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
-	gl.DrawArrays(gl.LINES, 0, len(vcs))
+	gl.DrawArrays(primitives, 0, len(vcs))
 }
 
 func (vcs ColorVertices) DrawPartial(i, N int64) {
 	if len(vcs) < 1 {
 		return
 	}
-	//if i+N > int64(len(vcs)) { N = int64(len(vcs)) - i }
 	if i+N > int64(len(vcs)) {
 		i = int64(len(vcs)) - N
 	}
@@ -63,13 +62,12 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 	if N < 1 {
 		return
 	}
-	//log.Print("N = ", N)
 
 	if i+N > int64(len(vcs)) {
 		N = int64(len(vcs)) - i
 	}
 
-	gl.PushClientAttrib(0xFFFFFFFF) //gl.CLIENT_ALL_ATTRIB_BITS)
+	gl.PushClientAttrib(0xFFFFFFFF)
 	defer gl.PopClientAttrib()
 
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
@@ -165,6 +163,10 @@ func MouseToProj(x, y int) (float64, float64) {
 }
 
 func Reshape(width, height int) {
+	if DoneThisFrame(ReshapeWindow) {
+		return
+	}
+
 	gl.Viewport(0, 0, width, height)
 
 	gl.MatrixMode(gl.PROJECTION)
@@ -177,7 +179,9 @@ func Reshape(width, height int) {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	if Draw != nil {
+		gl.DrawBuffer(gl.FRONT_AND_BACK)
 		Draw()
+		gl.DrawBuffer(gl.BACK)
 	}
 }
 

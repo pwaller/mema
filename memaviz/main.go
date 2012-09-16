@@ -8,22 +8,26 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime/pprof"
+	"runtime"
 	"time"
 
 	"github.com/banthar/gl"
 	"github.com/jteeuwen/glfw"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
-var nrec = flag.Int64("nrec", 0, "number of records to read")
-
-var nfram = flag.Int64("nfram", 100, "number of records to jump per frame")
 var nback = flag.Int64("nback", 8000, "number of records to show")
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var profiling = flag.Bool("prof", false, "enable profiling")
+var memprofile = flag.String("memprofile", "", "write mem profile to file")
+
 var verbose = flag.Bool("verbose", false, "Verbose")
 var debug = flag.Bool("debug", false, "Turn on debugging")
 var vsync = flag.Bool("vsync", true, "set to false to disable vsync")
+
+var use_stree = flag.Bool("stree", false, "Enable stree (may cause GC problems)")
 
 var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
@@ -39,6 +43,38 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
+// 100 = it's possible to schedule 100 actions per frame
+var main_thread_work chan func() = make(chan func(), 100)
+
+func DoMainThreadWork() {
+	// Run all work scheduled for the main thread
+	for have_work := true; have_work; {
+		select {
+		case f := <-main_thread_work:
+			f()
+		default:
+			have_work = false
+		}
+	}
+}
+
+type WorkType int
+
+const (
+	RenderText WorkType = iota
+	ReshapeWindow
+)
+
+var done_this_frame map[WorkType]bool = make(map[WorkType]bool)
+
+func DoneThisFrame(value WorkType) bool {
+	_, present := done_this_frame[value]
+	if !present {
+		done_this_frame[value] = true
+	}
+	return present
+}
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
@@ -48,15 +84,33 @@ func main_loop(data *ProgramData) {
 		for {
 			time.Sleep(time.Second)
 			if *verbose {
-				log.Print("fps = ", float64(frames)/time.Since(start).Seconds())
+				memstats := new(runtime.MemStats)
+				runtime.ReadMemStats(memstats)
+				fps := float64(frames) / time.Since(start).Seconds()
+				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB; alloc'd = %6.6f; (+footprint = %6.6f)",
+					fps, len(data.blocks), SpareRAM(), float64(memstats.Alloc)/1024/1024,
+					float64(memstats.Sys-memstats.Alloc)/1024/1024)
+
+				PrintTimers(frames)
 			}
 			start = time.Now()
 			frames = 0
 		}
 	}()
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	// Necessary at the moment to prevent eventual OOM
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			if *verbose {
+				log.Print("GC()")
+			}
+			runtime.GC()
+			if *verbose {
+				GCStats()
+			}
+		}
+	}()
 
 	var i int64 = -int64(*nback)
 
@@ -72,10 +126,9 @@ func main_loop(data *ProgramData) {
 	var mousex, mousey, mousedownx, mousedowny int
 	var mousepx, mousepy float64
 	var lbutton bool
+	escape_hit := false
 
 	glfw.SetMouseWheelCallback(func(pos int) {
-		// return
-		// TODO: make this work
 		nback_prev := *nback
 		if pos < 0 {
 			*nback = 40 * 1024 << uint(-pos)
@@ -103,27 +156,25 @@ func main_loop(data *ProgramData) {
 		i -= delta
 	})
 
-	var updated_this_frame bool = false
-
 	update_text := func() {
-		if updated_this_frame {
+		if DoneThisFrame(RenderText) {
 			return
 		}
-		updated_this_frame = true
 
 		if recordtext != nil {
 			recordtext.destroy()
 			recordtext = nil
 		}
-		if rec_actual > 0 && rec_actual < data.b.nrecords {
-			//log.Print(data.records[rec_actual])
-			recordtext = MakeText(data.b.records[rec_actual].String(), 32)
-		}
+		//r := 0 //data.GetRecord(rec_actual)
+		//if r != nil {
+		//log.Print(data.records[rec_actual])
+		//recordtext = MakeText(r.String(), 32)
+		//}
 
 		for j := range stacktext {
 			stacktext[j].destroy()
 		}
-		stack := data.b.GetStackNames(rec_actual)
+		stack := data.GetStackNames(rec_actual)
 		stacktext = make([]*Text, len(stack))
 		for j := range stack {
 			stacktext[j] = MakeText(stack[j], 32)
@@ -138,9 +189,8 @@ func main_loop(data *ProgramData) {
 				mousedownx, mousedowny = mousex, mousey
 				lbutton = true
 
-				if rec_actual > 0 && rec_actual < data.b.nrecords {
-					r := data.b.records[rec_actual]
-
+				r := data.GetRecord(rec_actual)
+				if r != nil {
 					if r.Type == MEMA_ACCESS {
 						log.Print(r)
 						ma := r.MemAccess()
@@ -194,18 +244,19 @@ func main_loop(data *ProgramData) {
 		update_text()
 	})
 
-	fbo := NewTextureBackedFBO(640, 400)
+	glfw.SetKeyCallback(func(key, state int) {
+		switch key {
+		case glfw.KeyEsc:
+			escape_hit = true
+		}
+	})
 
 	Draw = func() {
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		// Draw the memory access/function data
-		gl.PointSize(2)
-		wrapped := data.b.Draw(i, *nback)
-		if wrapped {
-			i = -int64(*nback)
-		}
+		data.Draw(i, *nback)
 
 		// Draw the mouse point
 		With(Matrix{gl.MODELVIEW}, func() {
@@ -242,6 +293,8 @@ func main_loop(data *ProgramData) {
 				}
 			})
 		})
+
+		fbo := NewTextureBackedFBO(640, 400)
 
 		With(Framebuffer{fbo}, func() {
 			With(Attrib{gl.COLOR_BUFFER_BIT}, func() {
@@ -304,29 +357,30 @@ func main_loop(data *ProgramData) {
 			})
 		})
 		OpenGLSentinel()
-		glfw.SwapBuffers()
 	}
+
+	interrupt := make(chan os.Signal)
+	signal.Notify(interrupt, os.Interrupt)
+	ctrlc_hit := false
+	go func() {
+		<-interrupt
+		ctrlc_hit = true
+	}()
 
 	done := false
 	for !done {
-		updated_this_frame = false
+		done_this_frame = make(map[WorkType]bool)
 
-		// TODO: Ability to modify *nfram and *nback at runtiem
-		//		 (i.e, pause and zoom functionality)
-		i += *nfram
+		With(&Timer{Name: "Draw"}, func() {
+			Draw()
+		})
 
-		Draw()
+		glfw.SwapBuffers()
 
-		//data.update <- true
+		DoMainThreadWork()
 
-		done = glfw.Key(glfw.KeyEsc) != 0 || glfw.WindowParam(glfw.Opened) == 0
+		done = ctrlc_hit || escape_hit || glfw.WindowParam(glfw.Opened) == 0
 		frames += 1
-		// Check for ctrl-c
-		select {
-		case <-interrupt:
-			done = true
-		default:
-		}
 	}
 }
 
@@ -337,14 +391,8 @@ func main() {
 		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
 	}
 
-	if *cpuprofile != "" {
-		log.Print("Profiling to ", *cpuprofile)
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+	if *profiling {
+		go func() { http.ListenAndServe(":6060", nil) }()
 	}
 
 	if *verbose {
@@ -354,7 +402,7 @@ func main() {
 
 	data := NewProgramData(flag.Arg(0))
 
-	cleanup := make_window(400, 400, "Memory Accesses")
+	cleanup := make_window(1280, 768, "Memory Accesses")
 	defer cleanup()
 
 	main_loop(data)
