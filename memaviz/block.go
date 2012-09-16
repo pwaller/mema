@@ -98,7 +98,7 @@ func (block *Block) BuildVertexData() {
 	block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
 }
 
-func (block *Block) Draw(start, N int64) bool {
+func (block *Block) Draw(start, N int64) {
 	if block.vertex_data == nil {
 		block.BuildVertexData()
 	}
@@ -110,28 +110,25 @@ func (block *Block) Draw(start, N int64) bool {
 
 	gl.LineWidth(1)
 
+	var vc, eolmarker ColorVertices
+
 	if *pageboundaries {
 
-		var vc ColorVertices
 		boundary_color := Color{64, 64, 64, 255}
 
-		ytop := -2 + 4*float32(0-start)/float32(*nback)
-		ybot := -2 + 4*float32(N-start)/float32(*nback)
-
 		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
-			for p := uint64(0); p <= width+*PAGE_SIZE; p += *PAGE_SIZE {
+			for p := uint64(0); p <= width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				vc.Add(ColorVertex{boundary_color, Vertex{x, ybot}})
-				vc.Add(ColorVertex{boundary_color, Vertex{x, ytop}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x, 0}})
+				vc.Add(ColorVertex{boundary_color, Vertex{x, float32(N)}})
 			}
 		}
-
-		With(Attrib{gl.ENABLE_BIT}, func() {
-			gl.Disable(gl.LINE_SMOOTH)
-			vc.Draw()
-		})
 	}
+
+	c := Color{255, 255, 255, 255}
+	eolmarker.Add(ColorVertex{c, Vertex{-2, 0}})
+	eolmarker.Add(ColorVertex{c, Vertex{2, 0}})
 
 	gl.LineWidth(1)
 	With(&Timer{Name: "DrawPartial"}, func() {
@@ -140,32 +137,22 @@ func (block *Block) Draw(start, N int64) bool {
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, -float64(start), 0)
 
+			With(Attrib{gl.ENABLE_BIT}, func() {
+				gl.Disable(gl.LINE_SMOOTH)
+				vc.Draw(gl.LINES)
+				eolmarker.Draw(gl.LINES)
+			})
+
 			gl.PointSize(2)
-			block.vertex_data.DrawPartial(start, *nback)
+
+			block.vertex_data.Draw(gl.POINTS)
 		})
 	})
-
-	NV := int64(len(*block.vertex_data))
-
-	var eolmarker ColorVertices
-
-	// End-of-block marker
-	y := -2 + 4*float32(NV-start)/float32(*nback)
-	c := Color{255, 255, 255, 255}
-	eolmarker.Add(ColorVertex{c, Vertex{-2, y}})
-	eolmarker.Add(ColorVertex{c, Vertex{2, y}})
-
-	OpenGLSentinel()
-
-	gl.LineWidth(1)
-	eolmarker.Draw()
-
-	return start > NV
 }
 
 func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 
-	width := uint64(len(block.active_pages)) * *PAGE_SIZE
+	width := uint64(len(block.active_pages)+1) * *PAGE_SIZE
 
 	vc := &ColorVertices{}
 
@@ -187,14 +174,14 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 
 			y := float32(int64(len(*vc)) - start)
 			c := Color{64, 64, 255, 255}
-			vc.Add(ColorVertex{c, Vertex{2.1 + float32(stack_depth)/80., y}})
+			vc.Add(ColorVertex{c, Vertex{2 + float32(stack_depth)/80., y}})
 
 			continue
 		} else if r.Type == MEMA_FUNC_EXIT {
 
 			y := float32(int64(len(*vc)) - start)
 			c := Color{255, 64, 64, 255}
-			vc.Add(ColorVertex{c, Vertex{2.1 + float32(stack_depth)/80., y}})
+			vc.Add(ColorVertex{c, Vertex{2 + float32(stack_depth)/80., y}})
 
 			stack_depth--
 

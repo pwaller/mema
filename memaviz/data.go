@@ -218,12 +218,24 @@ func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
 func (data *ProgramData) Draw(start_index, n int64) {
 	// TODO: determine blocks which are visible on screen
 
+	nperblock := int64(10 * 1024 * 1024 / 56)
+	start_block := start_index / nperblock
+	if start_block < 0 {
+		start_block = 0
+	}
+	n_blocks := n/nperblock + 2
+	if n_blocks < 1 {
+		n_blocks = 1
+	}
+	if start_block+n_blocks >= int64(len(data.blocks)) {
+		n_blocks = int64(len(data.blocks)) - start_block
+	}
+
 	With(&Timer{Name: "DrawBlocks"}, func() {
-		for i, b := range data.blocks {
-			b.Draw(start_index-int64(i)*b.nrecords, b.nrecords)
-			if false && i > 50 {
-				break
-			}
+		for i := range ints(start_block, n_blocks) {
+			b := data.blocks[i]
+			from, N := start_index-int64(i)*b.nrecords, b.nrecords
+			b.Draw(from, N)
 		}
 	})
 }

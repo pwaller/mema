@@ -30,7 +30,7 @@ type ColorVertex struct {
 }
 type ColorVertices []ColorVertex
 
-func (vcs ColorVertices) Draw() {
+func (vcs ColorVertices) Draw(primitives gl.GLenum) {
 	if len(vcs) < 1 {
 		return
 	}
@@ -39,7 +39,7 @@ func (vcs ColorVertices) Draw() {
 	defer gl.PopClientAttrib()
 
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))
-	gl.DrawArrays(gl.LINES, 0, len(vcs))
+	gl.DrawArrays(primitives, 0, len(vcs))
 }
 
 func (vcs ColorVertices) DrawPartial(i, N int64) {

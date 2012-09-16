@@ -58,3 +58,14 @@ func init() {
 	runtime.GOMAXPROCS(n)
 	log.Printf("GOMAXPROCS set to %d", n)
 }
+
+func ints(low, n int64) <-chan int64 {
+	result := make(chan int64)
+	go func() {
+		for i := low; i < low+n; i++ {
+			result <- i
+		}
+		close(result)
+	}()
+	return result
+}
