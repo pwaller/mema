@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"reflect"
 	"runtime"
 	"sort"
 
@@ -40,6 +41,16 @@ func Capture() {
 	defer fd.Close()
 
 	png.Encode(fd, im)
+}
+
+func SortedMapKeys(input interface{}) []string {
+	keys := reflect.ValueOf(input).MapKeys()
+	result := make([]string, len(keys))
+	for i, k := range keys {
+		result[i] = k.String()
+	}
+	sort.Strings(result)
+	return result
 }
 
 func init() {

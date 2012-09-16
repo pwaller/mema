@@ -93,9 +93,12 @@ func main_loop(data *ProgramData) {
 				memstats := new(runtime.MemStats)
 				runtime.ReadMemStats(memstats)
 				fps := float64(frames) / time.Since(start).Seconds()
-				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB; alloc'd = %6d; (+footprint = %6d)",
-					fps, len(data.blocks), SpareRAM(), memstats.HeapAlloc/1024/1024,
-					(memstats.Sys-memstats.HeapAlloc)/1024/1024)
+				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB; alloc'd = %6.6f; (+footprint = %6.6f)",
+					fps, len(data.blocks), SpareRAM(), float64(memstats.Alloc)/1024/1024,
+					float64(memstats.Sys-memstats.Alloc)/1024/1024)
+
+				PrintTimers(frames)
+				clear_last_timers()
 			}
 			start = time.Now()
 			frames = 0
@@ -257,7 +260,6 @@ func main_loop(data *ProgramData) {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		// Draw the memory access/function data
-		gl.PointSize(2)
 		data.Draw(i, *nback)
 
 		// Draw the mouse point
@@ -310,7 +312,10 @@ func main_loop(data *ProgramData) {
 	for !done {
 		done_this_frame = make(map[WorkType]bool)
 
-		Draw()
+		With(&Timer{Name: "Draw"}, func() {
+			Draw()
+		})
+
 		glfw.SwapBuffers()
 
 		DoMainThreadWork()

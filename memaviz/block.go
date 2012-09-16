@@ -12,7 +12,7 @@ type Block struct {
 	nrecords        int64
 	records         Records
 	context_records Records
-	vertex_data     []*ColorVertices
+	vertex_data     *ColorVertices
 
 	quiet_pages        map[uint64]bool
 	active_pages       map[uint64]bool
@@ -94,8 +94,14 @@ func (block *Block) ActiveRegionIDs() {
 	//return result
 }
 
+func (block *Block) BuildVertexData() {
+	block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
+}
+
 func (block *Block) Draw(start, N int64) bool {
-	defer OpenGLSentinel()()
+	if block.vertex_data == nil {
+		block.BuildVertexData()
+	}
 
 	width := uint64(len(block.active_pages)) * *PAGE_SIZE
 	if width == 0 {
@@ -128,22 +134,18 @@ func (block *Block) Draw(start, N int64) bool {
 	}
 
 	gl.LineWidth(1)
+	With(&Timer{Name: "DrawPartial"}, func() {
+		With(Matrix{gl.MODELVIEW}, func() {
+			gl.Translated(0, -2, 0)
+			gl.Scaled(1, 4/float64(*nback), 1)
+			gl.Translated(0, -float64(start), 0)
 
-	if cap(block.vertex_data) == 0 {
-		//log.Print("start = ", start)
-		block.vertex_data = make([]*ColorVertices, 1)
-		block.vertex_data[0] = block.GetAccessVertexData(0, int64(block.nrecords))
-	}
-
-	With(Matrix{gl.MODELVIEW}, func() {
-		gl.Translated(0, -2, 0)
-		gl.Scaled(1, 4/float64(*nback), 1)
-		gl.Translated(0, -float64(start), 0)
-
-		block.vertex_data[0].DrawPartial(start, *nback)
+			gl.PointSize(2)
+			block.vertex_data.DrawPartial(start, *nback)
+		})
 	})
 
-	NV := int64(len(*block.vertex_data[0]))
+	NV := int64(len(*block.vertex_data))
 
 	var eolmarker ColorVertices
 
