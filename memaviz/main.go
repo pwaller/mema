@@ -75,14 +75,6 @@ func DoneThisFrame(value WorkType) bool {
 	return present
 }
 
-func GCStats() {
-	memstats := new(runtime.MemStats)
-	runtime.ReadMemStats(memstats)
-	log.Printf("  -- paused for %v -- total %v -- N %d",
-		time.Duration(memstats.PauseNs[(memstats.NumGC-1)%256]),
-		time.Duration(memstats.PauseTotalNs), memstats.NumGC)
-}
-
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
@@ -109,11 +101,14 @@ func main_loop(data *ProgramData) {
 	// Necessary at the moment to prevent eventual OOM
 	go func() {
 		for {
-			time.Sleep(10 * time.Second)
+			time.Sleep(5 * time.Second)
 			if *verbose {
 				log.Print("GC()")
 			}
 			runtime.GC()
+			if *verbose {
+				GCStats()
+			}
 		}
 	}()
 

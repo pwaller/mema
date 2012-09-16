@@ -97,3 +97,11 @@ func ints(low, n int64) <-chan int64 {
 	}()
 	return result
 }
+
+func GCStats() {
+	memstats := new(runtime.MemStats)
+	runtime.ReadMemStats(memstats)
+	log.Printf("  -- paused for %v -- total %v -- N %d",
+		time.Duration(memstats.PauseNs[(memstats.NumGC-1)%256]),
+		time.Duration(memstats.PauseTotalNs), memstats.NumGC)
+}
