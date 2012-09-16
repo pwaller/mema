@@ -48,7 +48,8 @@ var main_thread_work chan func() = make(chan func(), 100)
 
 func DoMainThreadWork() {
 	// Run all work scheduled for the main thread
-	for have_work := true; have_work; {
+	start := time.Now()
+	for have_work := true; have_work && time.Since(start) < 20*time.Millisecond; {
 		select {
 		case f := <-main_thread_work:
 			f()
