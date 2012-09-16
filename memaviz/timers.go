@@ -26,9 +26,13 @@ func (t *Timer) Exit() {
 }
 
 func PrintTimers(n int) {
+	if n < 1 {
+		return
+	} // prevent divide by zero
 	x := ""
 	for _, k := range SortedMapKeys(last_timers) {
 		x += fmt.Sprintf("%s:%15v ", k, last_timers[k]/time.Duration(n))
 	}
-	log.Printf("Frame: %s", x)
+	log.Printf("Per frame: %s", x)
+	clear_last_timers()
 }

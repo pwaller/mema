@@ -10,8 +10,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/pwaller/go-clz4"
 )
@@ -130,32 +128,6 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 			}
 		}
 		data.region = append(data.region, x)
-	}
-}
-
-// Returns the number of spare megabytes of ram after leaving 100 + 10% spare
-func SpareRAM() int64 {
-	const GRACE_ABS = 100 // MB
-	const GRACE_REL = 10  // %
-
-	si := &syscall.Sysinfo_t{}
-	err := syscall.Sysinfo(si)
-	if err != nil {
-		return -999913379999
-	}
-	grace := int64(GRACE_REL*si.Totalram/100 + GRACE_ABS)
-	free := int64(si.Freeram + si.Bufferram)
-	//log.Print("Grace: ", grace, " free: ", free)
-	return (free - grace) / 1024 / 1024
-}
-
-func BlockUnlessSpareRAM(needed_mb int64) {
-	for {
-		spare := SpareRAM()
-		if spare >= needed_mb {
-			break
-		}
-		time.Sleep(100 * time.Microsecond)
 	}
 }
 

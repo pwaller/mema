@@ -98,7 +98,6 @@ func main_loop(data *ProgramData) {
 					float64(memstats.Sys-memstats.Alloc)/1024/1024)
 
 				PrintTimers(frames)
-				clear_last_timers()
 			}
 			start = time.Now()
 			frames = 0
