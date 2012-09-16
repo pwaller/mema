@@ -62,22 +62,16 @@ func NewProgramData(filename string) *ProgramData {
 	data.ParseHeader(reader)
 	data.ParsePageTable(reader)
 
-	// TODO: Stripe across the file to find where blocks are
-	// TODO: Load on demand sections which will be read
+	// TODO: Record block start offsets so that they can be jumped back to
+
 	new_block := make(chan *Block)
 	go data.ParseBlocks(reader, new_block)
 	go func() {
 		current_context := make(Records, 0)
-		i := 0
 		for b := range new_block {
 			b.full_data = data
 			b.context_records = current_context
 			b.stack_stree, current_context = b.BuildStree()
-			if i == 1 {
-				stack := (*b.stack_stree).Query(100, 100)
-				log.Print(" -- stree test:", stack)
-			}
-			i += 1
 			b.ActiveRegionIDs()
 
 			main_thread_work <- func(b *Block) func() {
@@ -87,22 +81,6 @@ func NewProgramData(filename string) *ProgramData {
 			}(b)
 		}
 	}()
-
-	//data.BlockParser(reader)
-
-	//data.b.full_data = data
-	// TODO: building the stree isn't going to work well with striping across file
-	//log.Print("Loading stree.. ", len(data.b.records))
-	//data.b.stack_stree = data.b.BuildStree()
-	//log.Print("Loaded stree")
-
-	//stack := (*data.b.stack_stree).Query(100, 100)
-	//log.Print(" -- stree test:", stack)
-
-	//active_regions := data.b.ActiveRegionIDs()
-	if *verbose {
-		//log.Printf("Have %d active regions", len(active_regions))
-	}
 
 	if *debug {
 		log.Print("Region info:")

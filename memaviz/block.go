@@ -158,7 +158,7 @@ func (block *Block) Draw(start, N int64) bool {
 	gl.LineWidth(1)
 	eolmarker.Draw()
 
-	return start > NV //int64(data.nrecords)
+	return start > NV
 }
 
 func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
@@ -211,7 +211,7 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 		x = (x - 0.5) * 4
 
 		if x > 4 || x < -4 {
-			//log.Panic("x has unexpected value: ", x)
+			log.Panic("x has unexpected value: ", x)
 		}
 
 		y := float32(int64(len(*vc)) - start)

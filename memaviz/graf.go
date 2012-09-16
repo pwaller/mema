@@ -46,7 +46,6 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 	if len(vcs) < 1 {
 		return
 	}
-	//if i+N > int64(len(vcs)) { N = int64(len(vcs)) - i }
 	if i+N > int64(len(vcs)) {
 		i = int64(len(vcs)) - N
 	}
@@ -56,13 +55,12 @@ func (vcs ColorVertices) DrawPartial(i, N int64) {
 	if N < 1 {
 		return
 	}
-	//log.Print("N = ", N)
 
 	if i+N > int64(len(vcs)) {
 		N = int64(len(vcs)) - i
 	}
 
-	gl.PushClientAttrib(0xFFFFFFFF) //gl.CLIENT_ALL_ATTRIB_BITS)
+	gl.PushClientAttrib(0xFFFFFFFF)
 	defer gl.PopClientAttrib()
 
 	gl.InterleavedArrays(gl.C4UB_V2F, 0, unsafe.Pointer(&vcs[0]))

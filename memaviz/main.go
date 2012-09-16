@@ -73,6 +73,14 @@ func DoneThisFrame(value WorkType) bool {
 	return present
 }
 
+func GCStats() {
+	memstats := new(runtime.MemStats)
+	runtime.ReadMemStats(memstats)
+	log.Printf("  -- paused for %v -- total %v -- N %d",
+		time.Duration(memstats.PauseNs[(memstats.NumGC-1)%256]),
+		time.Duration(memstats.PauseTotalNs), memstats.NumGC)
+}
+
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
