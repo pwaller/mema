@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"runtime"
 	"sort"
 
 	"github.com/banthar/gl"
@@ -39,4 +40,10 @@ func Capture() {
 	defer fd.Close()
 
 	png.Encode(fd, im)
+}
+
+func init() {
+	n := runtime.NumCPU() + 1
+	runtime.GOMAXPROCS(n)
+	log.Printf("GOMAXPROCS set to %d", n)
 }
