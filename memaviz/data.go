@@ -69,7 +69,9 @@ func NewProgramData(filename string) *ProgramData {
 		for b := range new_block {
 			b.full_data = data
 			b.context_records = current_context
-			b.stack_stree, current_context = b.BuildStree()
+			if *use_stree {
+				b.stack_stree, current_context = b.BuildStree()
+			}
 			b.ActiveRegionIDs()
 
 			main_thread_work <- func(b *Block) func() {

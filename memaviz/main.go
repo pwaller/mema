@@ -27,6 +27,8 @@ var verbose = flag.Bool("verbose", false, "Verbose")
 var debug = flag.Bool("debug", false, "Turn on debugging")
 var vsync = flag.Bool("vsync", true, "set to false to disable vsync")
 
+var use_stree = flag.Bool("stree", false, "Enable stree (may cause GC problems)")
+
 var pageboundaries = flag.Bool("pageboundaries", false, "pageboundaries")
 
 // TODO: Move these onto the file

@@ -60,6 +60,9 @@ func (b *Block) BuildStree() (*stree.Tree, Records) {
 
 // Returns the stack frame for a given record id
 func (block *Block) GetStack(record int64) []*Record {
+	if block.stack_stree == nil {
+		return []*Record{}
+	}
 	intervals := (*block.stack_stree).Query(int(record), int(record))
 	entry_indices := make([]int, len(intervals))
 	for i := range intervals {
