@@ -66,6 +66,9 @@ func SpareRAM() int64 {
 	const GRACE_ABS = 100 // MB
 	const GRACE_REL = 20  // %
 
+	memstats := new(runtime.MemStats)
+	runtime.ReadMemStats(memstats)
+
 	si := &syscall.Sysinfo_t{}
 	err := syscall.Sysinfo(si)
 	if err != nil {
@@ -73,8 +76,11 @@ func SpareRAM() int64 {
 	}
 	grace := int64(GRACE_REL*si.Totalram/100 + GRACE_ABS)
 	free := int64(si.Freeram + si.Bufferram)
+
+	allocated_but_unused := int64(memstats.Sys - memstats.Alloc)
+
 	//log.Print("Grace: ", grace, " free: ", free)
-	return (free - grace) / 1024 / 1024
+	return (free - grace + allocated_but_unused) / 1024 / 1024
 }
 
 func BlockUnlessSpareRAM(needed_mb int64) {
