@@ -7,7 +7,7 @@ import (
 	"log"
 	"sort"
 
-	"github.com/toberndo/go-stree/stree"
+	"github.com/JohannesEbke/go-stree/stree"
 )
 
 func (b *Block) BuildStree() (*stree.Tree, Records) {

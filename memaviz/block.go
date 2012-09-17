@@ -5,8 +5,8 @@ import (
 	"log"
 	"sort"
 
+	"github.com/JohannesEbke/go-stree/stree"
 	"github.com/banthar/gl"
-	"github.com/toberndo/go-stree/stree"
 )
 
 type Block struct {
