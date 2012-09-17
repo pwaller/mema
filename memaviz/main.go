@@ -224,7 +224,7 @@ func main_loop(data *ProgramData) {
 
 	glfw.SetMousePosCallback(func(x, y int) {
 
-		px, py := MouseToProj(x, y)
+		px, py := WindowToProj(x, y)
 		// Record index
 		rec = int64((py+2)*float64(*nback)/4. + 0.5)
 		rec_actual = rec + i

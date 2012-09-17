@@ -13,8 +13,8 @@ import (
 	"unsafe"
 
 	"github.com/banthar/gl"
-	"github.com/banthar/glu"
 	"github.com/jteeuwen/glfw"
+	"github.com/pwaller/glu"
 )
 
 // Used as "defer OpenGLSentinel()()" checks the gl error code on entry and exit
@@ -145,7 +145,7 @@ func GetViewportWH() (float64, float64) {
 	return float64(viewport[2]), float64(viewport[3])
 }
 
-func MouseToProj(x, y int) (float64, float64) {
+func WindowToProj(x, y int) (float64, float64) {
 	var projmat, modelmat [16]float64
 	var viewport [4]int32
 
@@ -162,6 +162,21 @@ func MouseToProj(x, y int) (float64, float64) {
 	return px, py
 }
 
+func ProjToWindow(x, y float64) (float64, float64) { //(int, int) {
+	var projmat, modelmat [16]float64
+	var viewport [4]int32
+
+	gl.GetDoublev(gl.PROJECTION_MATRIX, projmat[0:15])
+	gl.GetDoublev(gl.MODELVIEW_MATRIX, modelmat[0:15])
+	gl.GetIntegerv(gl.VIEWPORT, viewport[0:3])
+
+	px, py, _ := glu.Project(float64(x), float64(y), 0,
+		&modelmat, &projmat, &viewport)
+
+	//return int(px), int(viewport[3]) - int(py)
+	return px, float64(viewport[3]) - py
+}
+
 func Reshape(width, height int) {
 	if DoneThisFrame(ReshapeWindow) {
 		return
@@ -172,6 +187,7 @@ func Reshape(width, height int) {
 	gl.MatrixMode(gl.PROJECTION)
 	gl.LoadIdentity()
 	gl.Ortho(-2.1, 6.1, -2.25, 2.1, -1, 1)
+	//gl.Ortho(-2.1, 6.1, -2.25*2, 2.1*2, -1, 1) // Y debug
 
 	gl.MatrixMode(gl.MODELVIEW)
 	gl.LoadIdentity()
@@ -363,38 +379,46 @@ func debug_coords() {
 	gl.MatrixMode(gl.MODELVIEW)
 }
 
-func DrawQuadi(x, y, w, h int) {
+func Squarei(x, y, w, h int) {
 	var u, v, u2, v2 float32 = 0, 1, 1, 0
 
+	gl.TexCoord2f(u, v)
+	gl.Vertex2i(x, y)
+
+	gl.TexCoord2f(u2, v)
+	gl.Vertex2i(x+w, y)
+
+	gl.TexCoord2f(u2, v2)
+	gl.Vertex2i(x+w, y+h)
+
+	gl.TexCoord2f(u, v2)
+	gl.Vertex2i(x, y+h)
+}
+
+func DrawQuadi(x, y, w, h int) {
 	With(Primitive{gl.QUADS}, func() {
-		gl.TexCoord2f(u, v)
-		gl.Vertex2i(x, y)
-
-		gl.TexCoord2f(u2, v)
-		gl.Vertex2i(x+w, y)
-
-		gl.TexCoord2f(u2, v2)
-		gl.Vertex2i(x+w, y+h)
-
-		gl.TexCoord2f(u, v2)
-		gl.Vertex2i(x, y+h)
+		Squarei(x, y, w, h)
 	})
 }
 
-func DrawQuadd(x, y, w, h float64) {
+func Squared(x, y, w, h float64) {
 	var u, v, u2, v2 float32 = 0, 1, 1, 0
 
+	gl.TexCoord2f(u, v)
+	gl.Vertex2d(x, y)
+
+	gl.TexCoord2f(u2, v)
+	gl.Vertex2d(x+w, y)
+
+	gl.TexCoord2f(u2, v2)
+	gl.Vertex2d(x+w, y+h)
+
+	gl.TexCoord2f(u, v2)
+	gl.Vertex2d(x, y+h)
+}
+
+func DrawQuadd(x, y, w, h float64) {
 	With(Primitive{gl.QUADS}, func() {
-		gl.TexCoord2f(u, v)
-		gl.Vertex2d(x, y)
-
-		gl.TexCoord2f(u2, v)
-		gl.Vertex2d(x+w, y)
-
-		gl.TexCoord2f(u2, v2)
-		gl.Vertex2d(x+w, y+h)
-
-		gl.TexCoord2f(u, v2)
-		gl.Vertex2d(x, y+h)
+		Squared(x, y, w, h)
 	})
 }
