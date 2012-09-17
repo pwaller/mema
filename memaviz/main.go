@@ -44,12 +44,12 @@ var margin_factor = float32(1) //0.975)
 var Draw func() = nil
 
 // 100 = it's possible to schedule 100 actions per frame
-var main_thread_work chan func() = make(chan func(), 100)
+var main_thread_work chan func() = make(chan func(), 1000)
 
 func DoMainThreadWork() {
 	// Run all work scheduled for the main thread
 	start := time.Now()
-	for have_work := true; have_work && time.Since(start) < 20*time.Millisecond; {
+	for have_work := true; have_work && time.Since(start) < 5*time.Millisecond; {
 		select {
 		case f := <-main_thread_work:
 			f()
