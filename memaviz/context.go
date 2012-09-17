@@ -93,3 +93,19 @@ type Primitive struct{ Type gl.GLenum }
 
 func (p Primitive) Enter() { gl.Begin(p.Type) }
 func (p Primitive) Exit()  { gl.End() }
+
+type WindowCoords struct{}
+
+func (wc WindowCoords) Enter() {
+	w, h := GetViewportWH()
+	Matrix{gl.PROJECTION}.Enter()
+	gl.LoadIdentity()
+	gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
+	Matrix{gl.MODELVIEW}.Enter()
+	gl.LoadIdentity()
+}
+
+func (wc WindowCoords) Exit() {
+	Matrix{gl.MODELVIEW}.Exit()
+	Matrix{gl.PROJECTION}.Exit()
+}

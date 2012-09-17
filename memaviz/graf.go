@@ -208,6 +208,12 @@ type TextureBackedFBO struct {
 	rbo gl.Renderbuffer
 }
 
+func (fbo *TextureBackedFBO) AsImage() *image.RGBA {
+	rgba := image.NewRGBA(image.Rect(0, 0, fbo.w, fbo.h))
+	gl.GetTexImage(gl.TEXTURE_2D, 0, gl.RGBA, rgba.Pix)
+	return rgba
+}
+
 func NewTextureBackedFBO(w, h int) *TextureBackedFBO {
 	fbo := &TextureBackedFBO{w, h, gl.GenTexture(), gl.GenFramebuffer(), gl.GenRenderbuffer()}
 
