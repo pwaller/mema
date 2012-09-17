@@ -61,12 +61,13 @@ func init() {
 	log.Printf("GOMAXPROCS set to %d", n)
 }
 
+var memstats *runtime.MemStats = new(runtime.MemStats)
+
 // Returns the number of spare megabytes of ram after leaving 100 + 10% spare
 func SpareRAM() int64 {
 	const GRACE_ABS = 100 // MB
 	const GRACE_REL = 20  // %
 
-	memstats := new(runtime.MemStats)
 	runtime.ReadMemStats(memstats)
 
 	si := &syscall.Sysinfo_t{}

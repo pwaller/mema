@@ -113,7 +113,6 @@ func (block *Block) ActiveRegionIDs() {
 }
 
 func (block *Block) BuildVertexData() {
-	block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
 	block.fbo = NewTextureBackedFBO(200, 100)
 
 	With(Framebuffer{block.fbo}, func() {
@@ -161,12 +160,10 @@ func (block *Block) Draw(start, N int64) {
 		if _, loading := loadingblock[block]; !loading {
 			loadingblock[block] = true
 			go func() {
+				block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
 				main_thread_work <- func() {
 					With(&Timer{Name: "LoadTextures"}, func() {
 						block.BuildVertexData()
-					})
-					With(&Timer{Name: "ReLoadTextures"}, func() {
-
 					})
 					delete(loadingblock, block)
 				}
