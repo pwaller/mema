@@ -216,6 +216,7 @@ func (data *ProgramData) Draw(start_index, n int64) {
 
 func (data *ProgramData) GetRecord(i int64) *Record {
 	// TODO: determine block from `i`
+	return nil
 	if i >= 0 && i < data.blocks[0].nrecords {
 		return &data.blocks[0].records[i]
 	}

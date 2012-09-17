@@ -175,10 +175,13 @@ func main_loop(data *ProgramData) {
 		for j := range stacktext {
 			stacktext[j].destroy()
 		}
-		stack := data.GetStackNames(rec_actual)
-		stacktext = make([]*Text, len(stack))
-		for j := range stack {
-			stacktext[j] = MakeText(stack[j], 32)
+		// TODO: Load records on demand
+		if false {
+			stack := data.GetStackNames(rec_actual)
+			stacktext = make([]*Text, len(stack))
+			for j := range stack {
+				stacktext[j] = MakeText(stack[j], 32)
+			}
 		}
 	}
 
