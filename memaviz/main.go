@@ -295,69 +295,10 @@ func main_loop(data *ProgramData) {
 			})
 		})
 
-		fbo := NewTextureBackedFBO(640, 400)
+		// Visible region quad
+		// gl.Color4f(1, 1, 1, 0.25)
+		// DrawQuadd(-2.1, -2.25, 4.4, 2.1 - -2.25)
 
-		With(Framebuffer{fbo}, func() {
-			With(Attrib{gl.COLOR_BUFFER_BIT}, func() {
-				gl.ClearColor(0, 0, 0, 1)
-				gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-			})
-
-			With(Compound(Attrib{gl.VIEWPORT_BIT}, Matrix{gl.PROJECTION}), func() {
-				gl.Viewport(0, 0, fbo.w, fbo.h)
-				gl.LoadIdentity()
-				//gl.Ortho(0, float64(fbo.w), 0, float64(fbo.h), -1, 1)
-				gl.Ortho(-2.1, 2.25, 2.1, -2.1, -1, 1)
-				gl.PointSize(2)
-				data.b.Draw(i, *nback)
-
-				/*
-					With(Matrix{gl.MODELVIEW}, func() {
-						gl.LoadIdentity()
-						With(Primitive{gl.LINES}, func() {
-							gl.Color4f(1, 1, 1, 1)
-							gl.Vertex2f(0, 0)
-							gl.Vertex2f(50, 100)
-
-							gl.Vertex2f(0, 0)
-							gl.Vertex2f(-100, -50)
-						})
-					})
-				*/
-			})
-
-			With(Texture{fbo.texture, gl.TEXTURE_2D}, func() {
-				//size := make([]int32, 1)
-				//gl.GetTexLevelParameteriv(gl.TEXTURE_2D, 0, gl.TEXTURE_COMPRESSED_IMAGE_SIZE, size)
-				//log.Print("Compressed size: ", size)
-				//OpenGLSentinel()
-			})
-		})
-
-		With(Matrix{gl.PROJECTION}, func() {
-			gl.LoadIdentity()
-
-			w, h := GetViewportWH()
-			gl.Ortho(0, w, 0, h, -1, 1)
-			gl.Color4f(1, 1, 1, 1)
-			With(Attrib{gl.ENABLE_BIT}, func() {
-				//gl.Disable(gl.BLEND)
-				With(Texture{fbo.texture, gl.TEXTURE_2D}, func() {
-					gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-					gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-					DrawQuadi(0, 0, fbo.w, fbo.h)
-				})
-				With(Texture{fbo.texture, gl.TEXTURE_2D}, func() {
-					gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-					gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-					//gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR_MIPMAP_NEAREST)
-					//gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST)
-					OpenGLSentinel()
-					DrawQuadi(fbo.w, 0, fbo.w, fbo.h)
-				})
-			})
-		})
-		OpenGLSentinel()
 	}
 
 	interrupt := make(chan os.Signal)
