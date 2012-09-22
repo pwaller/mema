@@ -16,7 +16,11 @@ func OpenGLSentinel() func() {
 	check := func() {
 		e := gl.GetError()
 		if e != gl.NO_ERROR {
-			log.Panic("Encountered GLError: ", e)
+			s, err := glu.ErrorString(e)
+			if err != nil {
+				log.Panic("Invalid error code: ", err)
+			}
+			log.Panic("Encountered GLError: ", e, " = ", s)
 		}
 	}
 	check()
