@@ -39,23 +39,10 @@ type Bindable interface {
 	Unbind()
 }
 
-type Framebuffer struct{ Bindable }
-
-func (b Framebuffer) Enter() { b.Bind() }
-func (b Framebuffer) Exit()  { b.Unbind() }
-
 type BindableOneArg interface {
 	Bind(gl.GLenum)
 	Unbind(gl.GLenum)
 }
-
-type Texture struct {
-	BindableOneArg
-	Value gl.GLenum
-}
-
-func (b Texture) Enter() { gl.Enable(gl.TEXTURE_2D); b.Bind(b.Value) }
-func (b Texture) Exit()  { b.Unbind(b.Value); gl.Disable(gl.TEXTURE_2D) }
 
 // A context which preserves the matrix mode, drawing, etc.
 type Matrix struct{ Type gl.GLenum }

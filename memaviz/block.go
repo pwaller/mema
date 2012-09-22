@@ -19,7 +19,7 @@ type Block struct {
 	n_pages_to_left, n_inactive_to_left             map[uint64]uint64
 	stack_stree                                     *stree.Tree
 
-	fbo *TextureBackedFBO
+	tex *Texture
 	img *image.RGBA
 
 	full_data *ProgramData
@@ -113,17 +113,19 @@ func (block *Block) ActiveRegionIDs() {
 }
 
 func (block *Block) BuildVertexData() {
-	block.fbo = NewTextureBackedFBO(200, 100)
+	block.tex = NewTexture(100, 400)
+	block.tex.Init()
 
-	With(Framebuffer{block.fbo}, func() {
+	With(&Framebuffer{tex: block.tex}, func() {
+
 		With(Attrib{gl.COLOR_BUFFER_BIT}, func() {
 			gl.ClearColor(0, 0, 0, 1)
 			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		})
 		With(Compound(Attrib{gl.VIEWPORT_BIT}, Matrix{gl.PROJECTION}), func() {
-			gl.Viewport(0, 0, block.fbo.w, block.fbo.h)
+			gl.Viewport(0, 0, block.tex.w, block.tex.h)
 			gl.LoadIdentity()
-			//gl.Ortho(0, float64(fbo.w), 0, float64(fbo.h), -1, 1)
+			//gl.Ortho(0, float64(tex.w), 0, float64(tex.h), -1, 1)
 			gl.Ortho(-2, 2, 2, -2, -1, 1)
 
 			With(Matrix{gl.MODELVIEW}, func() {
@@ -148,7 +150,7 @@ func (block *Block) BuildVertexData() {
 		})
 	})
 
-	block.img = block.fbo.AsImage()
+	block.img = block.tex.AsImage()
 	block.vertex_data = nil
 	block.records = Records{}
 }
@@ -156,7 +158,7 @@ func (block *Block) BuildVertexData() {
 var loadingblock map[*Block]bool = make(map[*Block]bool)
 
 func (block *Block) Draw(start, N int64) {
-	if block.fbo == nil {
+	if block.tex == nil {
 		if _, loading := loadingblock[block]; !loading {
 			loadingblock[block] = true
 			go func() {
@@ -223,7 +225,7 @@ func (block *Block) Draw(start, N int64) {
 		})
 		With(WindowCoords{}, func() {
 			gl.Color4f(1, 1, 1, 1)
-			With(Texture{block.fbo.texture, gl.TEXTURE_2D}, func() {
+			With(block.tex, func() {
 				DrawQuadd(x1, y1, x2-x1, y2-y1)
 			})
 

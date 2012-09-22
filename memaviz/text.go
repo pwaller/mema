@@ -13,9 +13,8 @@ import (
 var FontFile = "env/src/code.google.com/p/freetype-go/luxi-fonts/luximr.ttf"
 
 type Text struct {
-	str  string
-	w, h int
-	id   gl.Texture
+	str string
+	*Texture
 }
 
 func MakeText(str string, size float64) *Text {
@@ -46,7 +45,7 @@ func MakeText(str string, size float64) *Text {
 		log.Panic("Error: ", err)
 	}
 
-	text.w, text.h = int(s.X/256), int(s.Y/256)+10
+	text.Texture = NewTexture(int(s.X/256), int(s.Y/256)+10)
 
 	if text.w > 4096 {
 		text.w = 4096
@@ -63,20 +62,19 @@ func MakeText(str string, size float64) *Text {
 		log.Panic("Error: ", err)
 	}
 
-	text.id = gl.GenTexture()
-
-	With(Texture{text.id, gl.TEXTURE_2D}, func() {
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+	With(text, func() {
+		/*
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+		*/
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, text.w, text.h, 0, gl.RGBA,
 			gl.UNSIGNED_BYTE, rgba.Pix)
 	})
 
 	if gl.GetError() != gl.NO_ERROR {
-		text.id.Delete()
 		log.Panic("Failed to load a texture, err = ", gl.GetError(),
 			" str = ", str, " w = ", text.w, " h = ", text.h)
 	}
@@ -85,12 +83,12 @@ func MakeText(str string, size float64) *Text {
 }
 
 func (text *Text) destroy() {
-	text.id.Delete()
+	text.Texture.Delete()
 }
 
 func (text *Text) Draw(x, y int) {
 	var w, h int = text.w / 2, text.h / 2
-	With(Texture{text.id, gl.TEXTURE_2D}, func() {
+	With(text, func() {
 		DrawQuadi(x, y, w, h)
 	})
 }
