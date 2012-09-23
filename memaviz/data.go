@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/pwaller/go-clz4"
+
+	glh "github.com/pwaller/go-glhelpers"
 )
 
 type ProgramData struct {
@@ -205,7 +207,7 @@ func (data *ProgramData) Draw(start_index, n int64) {
 		n_blocks = int64(len(data.blocks)) - start_block
 	}
 
-	With(&Timer{Name: "DrawBlocks"}, func() {
+	glh.With(&Timer{Name: "DrawBlocks"}, func() {
 		for i := range ints(start_block, n_blocks) {
 			b := data.blocks[i]
 			from, N := start_index-int64(i)*b.nrecords, b.nrecords

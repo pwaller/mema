@@ -7,6 +7,8 @@ import (
 
 	"github.com/JohannesEbke/go-stree/stree"
 	"github.com/banthar/gl"
+
+	glh "github.com/pwaller/go-glhelpers"
 )
 
 type Block struct {
@@ -19,7 +21,7 @@ type Block struct {
 	n_pages_to_left, n_inactive_to_left             map[uint64]uint64
 	stack_stree                                     *stree.Tree
 
-	tex *Texture
+	tex *glh.Texture
 	img *image.RGBA
 
 	full_data *ProgramData
@@ -113,26 +115,27 @@ func (block *Block) ActiveRegionIDs() {
 }
 
 func (block *Block) BuildVertexData() {
-	block.tex = NewTexture(100, 400)
+	log.Print("BuildVertexData()")
+	block.tex = glh.NewTexture(2048, 400)
 	block.tex.Init()
 
-	With(&Framebuffer{tex: block.tex}, func() {
+	glh.With(&glh.Framebuffer{Texture: block.tex}, func() {
 
-		With(Attrib{gl.COLOR_BUFFER_BIT}, func() {
+		glh.With(glh.Attrib{gl.COLOR_BUFFER_BIT}, func() {
 			gl.ClearColor(0, 0, 0, 1)
 			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		})
-		With(Compound(Attrib{gl.VIEWPORT_BIT}, Matrix{gl.PROJECTION}), func() {
-			gl.Viewport(0, 0, block.tex.w, block.tex.h)
+		glh.With(glh.Compound(glh.Attrib{gl.VIEWPORT_BIT}, glh.Matrix{gl.PROJECTION}), func() {
+			gl.Viewport(0, 0, block.tex.W, block.tex.H)
 			gl.LoadIdentity()
 			//gl.Ortho(0, float64(tex.w), 0, float64(tex.h), -1, 1)
 			gl.Ortho(-2, 2, 2, -2, -1, 1)
 
-			With(Matrix{gl.MODELVIEW}, func() {
+			glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 				gl.LoadIdentity()
 
 				gl.PointSize(1)
-				With(Matrix{gl.MODELVIEW}, func() {
+				glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 					gl.Translated(0, -2, 0)
 					gl.Scaled(1, 4/float64(block.nrecords), 1)
 
@@ -164,7 +167,7 @@ func (block *Block) Draw(start, N int64) {
 			go func() {
 				block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
 				main_thread_work <- func() {
-					With(&Timer{Name: "LoadTextures"}, func() {
+					glh.With(&Timer{Name: "LoadTextures"}, func() {
 						block.BuildVertexData()
 					})
 					delete(loadingblock, block)
@@ -202,9 +205,9 @@ func (block *Block) Draw(start, N int64) {
 	eolmarker.Add(ColorVertex{c, Vertex{2, 0}})
 
 	gl.LineWidth(1)
-	With(&Timer{Name: "DrawPartial"}, func() {
+	glh.With(&Timer{Name: "DrawPartial"}, func() {
 		var x1, y1, x2, y2 float64
-		With(Matrix{gl.MODELVIEW}, func() {
+		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 			gl.Translated(0, -2, 0)
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, -float64(start), 0)
@@ -216,17 +219,17 @@ func (block *Block) Draw(start, N int64) {
 
 			//block.vertex_data.Draw(gl.POINTS)
 
-			x1, y1 = ProjToWindow(-2, 0)
-			x2, y2 = ProjToWindow(-2+4, float64(N))
+			x1, y1 = glh.ProjToWindow(-2, 0)
+			x2, y2 = glh.ProjToWindow(-2+4, float64(N))
 
 			//_, h := GetViewportWH()
 			//log.Printf("  h = %f -- %f", y1-y2, float64(int64(h)*N/(*nback))/(2.25*2- -2.1*2)*4)
 
 		})
-		With(WindowCoords{}, func() {
+		glh.With(glh.WindowCoords{}, func() {
 			gl.Color4f(1, 1, 1, 1)
-			With(block.tex, func() {
-				DrawQuadd(x1, y1, x2-x1, y2-y1)
+			glh.With(block.tex, func() {
+				glh.DrawQuadd(x1, y1, x2-x1, y2-y1)
 			})
 
 			/*
@@ -236,12 +239,12 @@ func (block *Block) Draw(start, N int64) {
 				})
 			*/
 		})
-		With(Matrix{gl.MODELVIEW}, func() {
+		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 			gl.Translated(0, -2, 0)
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, -float64(start), 0)
 
-			With(Attrib{gl.ENABLE_BIT}, func() {
+			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Disable(gl.LINE_SMOOTH)
 				vc.Draw(gl.LINES)
 				//eolmarker.Draw(gl.LINES)

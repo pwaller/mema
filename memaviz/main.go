@@ -14,6 +14,8 @@ import (
 	"github.com/banthar/gl"
 	"github.com/jteeuwen/glfw"
 
+	glh "github.com/pwaller/go-glhelpers"
+
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -115,14 +117,13 @@ func main_loop(data *ProgramData) {
 
 	var i int64 = -int64(*nback)
 
-	text := MakeText(data.filename, 32)
+	text := glh.MakeText(data.filename, 32)
 
 	// Location of mouse in record space
 	var rec, rec_actual int64 = 0, 0
 
-	var stacktext []*Text
-	var dwarftext []*Text
-	var recordtext *Text = nil
+	var stacktext, dwarftext []*glh.Text
+	var recordtext *glh.Text = nil
 
 	var mousex, mousey, mousedownx, mousedowny int
 	var mousepx, mousepy float64
@@ -163,7 +164,7 @@ func main_loop(data *ProgramData) {
 		}
 
 		if recordtext != nil {
-			recordtext.destroy()
+			recordtext.Destroy()
 			recordtext = nil
 		}
 		//r := 0 //data.GetRecord(rec_actual)
@@ -173,14 +174,14 @@ func main_loop(data *ProgramData) {
 		//}
 
 		for j := range stacktext {
-			stacktext[j].destroy()
+			stacktext[j].Destroy()
 		}
 		// TODO: Load records on demand
 		if false {
 			stack := data.GetStackNames(rec_actual)
-			stacktext = make([]*Text, len(stack))
+			stacktext = make([]*glh.Text, len(stack))
 			for j := range stack {
-				stacktext[j] = MakeText(stack[j], 32)
+				stacktext[j] = glh.MakeText(stack[j], 32)
 			}
 		}
 	}
@@ -208,11 +209,11 @@ func main_loop(data *ProgramData) {
 						log.Print("")
 
 						for j := range dwarftext {
-							dwarftext[j].destroy()
+							dwarftext[j].Destroy()
 						}
-						dwarftext = make([]*Text, len(dwarf))
+						dwarftext = make([]*glh.Text, len(dwarf))
 						for j := range dwarf {
-							dwarftext[j] = MakeText(fmt.Sprintf("%q", dwarf[j]), 32)
+							dwarftext[j] = glh.MakeText(fmt.Sprintf("%q", dwarf[j]), 32)
 						}
 					}
 
@@ -227,7 +228,7 @@ func main_loop(data *ProgramData) {
 
 	glfw.SetMousePosCallback(func(x, y int) {
 
-		px, py := WindowToProj(x, y)
+		px, py := glh.WindowToProj(x, y)
 		// Record index
 		rec = int64((py+2)*float64(*nback)/4. + 0.5)
 		rec_actual = rec + i
@@ -263,27 +264,27 @@ func main_loop(data *ProgramData) {
 		data.Draw(i, *nback)
 
 		// Draw the mouse point
-		With(Matrix{gl.MODELVIEW}, func() {
+		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 			gl.Translated(0, -2, 0)
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, float64(rec), 0)
 
 			gl.PointSize(10)
-			With(Primitive{gl.POINTS}, func() {
+			glh.With(glh.Primitive{gl.POINTS}, func() {
 				gl.Color4f(1, 1, 1, 1)
 				gl.Vertex3d(mousepx, 0, 0)
 			})
 		})
 
 		// Draw any text
-		With(Matrix{gl.PROJECTION}, func() {
+		glh.With(glh.Matrix{gl.PROJECTION}, func() {
 			gl.LoadIdentity()
 
-			w, h := GetViewportWH()
+			w, h := glh.GetViewportWH()
 			gl.Ortho(0, w, 0, h, -1, 1)
 			gl.Color4f(1, 1, 1, 1)
 
-			With(Attrib{gl.ENABLE_BIT}, func() {
+			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Enable(gl.TEXTURE_2D)
 				text.Draw(0, 0)
 				for text_idx := range stacktext {
@@ -316,7 +317,7 @@ func main_loop(data *ProgramData) {
 	for !done {
 		done_this_frame = make(map[WorkType]bool)
 
-		With(&Timer{Name: "Draw"}, func() {
+		glh.With(&Timer{Name: "Draw"}, func() {
 			Draw()
 		})
 
