@@ -20,34 +20,10 @@ type ProgramData struct {
 	filename string
 	region   []MemRegion
 	blocks   []*Block
-
-	//update              chan<- bool
-	//new_block_available <-chan *Block
-	//request_new_block   chan<- int
 }
 
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
-
-	/*
-		data.update := make(chan bool)
-
-		new_block_available := make(chan *Block)
-		data.new_block_available = new_block_available
-
-		go func() {
-			var new_blocks []*Block
-			for {
-				select {
-					case block := <- data.new_block_available:
-						new_blocks = append(new_blocks, block)
-					case <-data.update:
-						data.blocks = append(data.blocks, new_blocks...)
-						new_blocks = []*Block{}
-				}
-			}
-		}()
-	*/
 
 	data.filename = filename
 

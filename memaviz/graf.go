@@ -15,8 +15,8 @@ func Init() {
 	// Anti-aliasing
 	gl.Enable(gl.LINE_SMOOTH)
 	gl.Enable(gl.BLEND)
-	//gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	//gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
 	//gl.BlendFunc(gl.SRC_ALPHA_SATURATE, gl.ONE)
 	gl.Hint(gl.LINE_SMOOTH_HINT, gl.NICEST)
 
