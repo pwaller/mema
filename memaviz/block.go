@@ -156,7 +156,11 @@ func (block *Block) BuildVertexData() {
 	block.img = block.tex.AsImage()
 	block.vertex_data = nil
 	block.records = Records{}
+
+	blocks_rendered++
 }
+
+var blocks_rendered = int64(0)
 
 var loadingblock map[*Block]bool = make(map[*Block]bool)
 

@@ -299,6 +299,7 @@ func main_loop(data *ProgramData) {
 		// gl.Color4f(1, 1, 1, 0.25)
 		// DrawQuadd(-2.1, -2.25, 4.4, 2.1 - -2.25)
 
+		StatsHUD()
 	}
 
 	interrupt := make(chan os.Signal)
@@ -328,6 +329,8 @@ func main_loop(data *ProgramData) {
 
 func main() {
 	flag.Parse()
+
+	InitStatsHUD()
 
 	if flag.NArg() != 1 {
 		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())

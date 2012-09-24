@@ -136,19 +136,20 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 	}
 }
 
+var nblocks = int64(0)
+
 func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) {
 	// These buffers must have a maximum capacity which can fit whatever we 
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
 
-	blocks := int64(0)
 	input := make([]byte, 0, 10*1024*1024)
 	round_1 := make([]byte, 1, 10*1024*1024)
 
 	for {
 		BlockUnlessSpareRAM(100)
 
-		blocks++
+		nblocks++
 		var block_size int64
 		err := binary.Read(reader, binary.LittleEndian, &block_size)
 		if err == io.EOF {
