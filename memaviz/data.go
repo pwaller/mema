@@ -75,6 +75,7 @@ func NewProgramData(filename string) *ProgramData {
 				b.stack_stree, current_context = b.BuildStree()
 			}
 			b.ActiveRegionIDs()
+			b.vertex_data = b.GenerateVertices()
 
 			main_thread_work <- func(b *Block) func() {
 				return func() {
@@ -145,7 +146,7 @@ func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) 
 	round_1 := make([]byte, 1, 10*1024*1024)
 
 	for {
-		BlockUnlessSpareRAM(10)
+		BlockUnlessSpareRAM(100)
 
 		blocks++
 		var block_size int64

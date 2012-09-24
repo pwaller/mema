@@ -165,7 +165,7 @@ func (block *Block) Draw(start, N int64) {
 		if _, loading := loadingblock[block]; !loading {
 			loadingblock[block] = true
 			go func() {
-				block.vertex_data = block.GetAccessVertexData(0, int64(block.nrecords))
+
 				main_thread_work <- func() {
 					glh.With(&Timer{Name: "LoadTextures"}, func() {
 						block.BuildVertexData()
@@ -264,7 +264,7 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 	// 		OTOH, this might not be supported on older cards
 	var stack_depth int = len(block.context_records)
 
-	for pos := start; pos < min(start+N, int64(block.nrecords)); pos++ {
+	for pos := int64(0); pos < int64(block.nrecords); pos++ {
 		if pos < 0 {
 			continue
 		}
