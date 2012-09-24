@@ -15,7 +15,7 @@ type Block struct {
 	nrecords        int64
 	records         Records
 	context_records Records
-	vertex_data     *ColorVertices
+	vertex_data     *glh.ColorVertices
 
 	quiet_pages, active_pages, display_active_pages map[uint64]bool
 	n_pages_to_left, n_inactive_to_left             map[uint64]uint64
@@ -184,25 +184,25 @@ func (block *Block) Draw(start, N int64) {
 
 	gl.LineWidth(1)
 
-	var vc, eolmarker ColorVertices
+	var vc, eolmarker glh.ColorVertices
 
 	if *pageboundaries {
 
-		boundary_color := Color{64, 64, 64, 255}
+		boundary_color := glh.Color{64, 64, 64, 255}
 
 		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
 			for p := uint64(0); p <= width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				vc.Add(ColorVertex{boundary_color, Vertex{x, 0}})
-				vc.Add(ColorVertex{boundary_color, Vertex{x, float32(N)}})
+				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, 0}})
+				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, float32(N)}})
 			}
 		}
 	}
 
-	c := Color{255, 255, 255, 255}
-	eolmarker.Add(ColorVertex{c, Vertex{-2, 0}})
-	eolmarker.Add(ColorVertex{c, Vertex{2, 0}})
+	c := glh.Color{255, 255, 255, 255}
+	eolmarker.Add(glh.ColorVertex{c, glh.Vertex{-2, 0}})
+	eolmarker.Add(glh.ColorVertex{c, glh.Vertex{2, 0}})
 
 	gl.LineWidth(1)
 	glh.With(&Timer{Name: "DrawPartial"}, func() {
@@ -234,8 +234,8 @@ func (block *Block) Draw(start, N int64) {
 
 			/*
 				gl.Color4f(1, 1, 1, 1)
-				With(Primitive{gl.LINE_LOOP}, func() {
-					Squared(640+x1, y1, x2-x1, y2-y1)
+				glh.With(glh.Primitive{gl.LINE_LOOP}, func() {
+					glh.Squared(x1, y1, x2-x1, y2-y1)
 				})
 			*/
 		})
@@ -253,11 +253,11 @@ func (block *Block) Draw(start, N int64) {
 	})
 }
 
-func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
+func (block *Block) GenerateVertices() *glh.ColorVertices {
 
 	width := uint64(len(block.display_active_pages)+1) * *PAGE_SIZE
 
-	vc := &ColorVertices{}
+	vc := &glh.ColorVertices{}
 
 	// TODO: Transport vertices to the GPU in bulk using glBufferData
 	//	   Function calls here appear to be the biggest bottleneck
@@ -275,16 +275,16 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 		} else if r.Type == MEMA_FUNC_ENTER {
 			stack_depth++
 
-			y := float32(int64(len(*vc)) - start)
-			c := Color{64, 64, 255, 255}
-			vc.Add(ColorVertex{c, Vertex{2 + float32(stack_depth)/80., y}})
+			y := float32(int64(len(*vc)))
+			c := glh.Color{64, 64, 255, 255}
+			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
 
 			continue
 		} else if r.Type == MEMA_FUNC_EXIT {
 
-			y := float32(int64(len(*vc)) - start)
-			c := Color{255, 64, 64, 255}
-			vc.Add(ColorVertex{c, Vertex{2 + float32(stack_depth)/80., y}})
+			y := float32(int64(len(*vc)))
+			c := glh.Color{255, 64, 64, 255}
+			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
 
 			stack_depth--
 
@@ -306,11 +306,11 @@ func (block *Block) GetAccessVertexData(start, N int64) *ColorVertices {
 			log.Panic("x has unexpected value: ", x)
 		}
 
-		y := float32(int64(len(*vc)) - start)
+		y := float32(len(*vc))
 
-		c := Color{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
+		c := glh.Color{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
 
-		vc.Add(ColorVertex{c, Vertex{x, y}})
+		vc.Add(glh.ColorVertex{c, glh.Vertex{x, y}})
 
 		/*
 			TODO: Reintroduce 'recently hit memory locations'
