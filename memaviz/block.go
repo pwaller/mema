@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"log"
+	"runtime"
 	"sort"
 
 	"github.com/JohannesEbke/go-stree/stree"
@@ -158,6 +159,7 @@ func (block *Block) BuildVertexData() {
 	block.records = Records{}
 
 	blocks_rendered++
+	runtime.GC()
 }
 
 var blocks_rendered = int64(0)
