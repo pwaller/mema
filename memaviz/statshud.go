@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"time"
 
 	glh "github.com/pwaller/go-glhelpers"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/pwaller/go-chart"
 	"github.com/pwaller/go-chart/openglg"
+
+	"github.com/ajstarks/svgo"
+	"github.com/pwaller/go-chart/svgg"
 	"image/color"
 
 	"github.com/banthar/gl"
@@ -66,6 +70,7 @@ func (s *Statistics) Update() float64 {
 }
 
 var StatsHUD = func() {}
+var DumpStatsHUD = func() {}
 
 func InitStatsHUD() {
 	plots := chart.ScatterChart{Title: "", Options: openglg.DarkStyle}
@@ -164,5 +169,23 @@ func InitStatsHUD() {
 			})
 		})
 	}
+
+	DumpStatsHUD = func() {
+
+		s2f, _ := os.Create("statshud-dump.svg")
+		mysvg := svg.New(s2f)
+		mysvg.Start(1600, 800)
+		mysvg.Rect(0, 0, 2000, 800, "fill: #ffffff")
+		sgr := svgg.New(mysvg, 2000, 800, "Arial", 18, color.RGBA{0xff, 0xff, 0xff, 0xff})
+		sgr.Begin()
+
+		plots.Plot(sgr)
+
+		sgr.End()
+		mysvg.End()
+		s2f.Close()
+		log.Print("Saved statshud-dump.svg")
+	}
+
 	log.Print("InitStatsHUD()")
 }

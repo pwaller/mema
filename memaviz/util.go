@@ -107,6 +107,12 @@ func meminfo() (total, free, buffers, cached int64) {
 
 var memstats *runtime.MemStats = new(runtime.MemStats)
 
+func SystemFree() int64 {
+	total, free, buffers, cached := meminfo()
+	_, _ = total, buffers
+	return free + cached
+}
+
 // Returns the number of spare megabytes of ram after leaving 100 + 10% spare
 func SpareRAM() int64 {
 	const GRACE_ABS = 100 // MB

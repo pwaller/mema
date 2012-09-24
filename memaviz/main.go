@@ -327,8 +327,20 @@ func main_loop(data *ProgramData) {
 	}
 }
 
+func FailSafe() {
+	for {
+		time.Sleep(1 * time.Microsecond)
+		if SystemFree() < 400e6 {
+			DumpStatsHUD()
+			log.Fatal("Less than 400MB system RAM free. Aborting")
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
+
+	go FailSafe()
 
 	InitStatsHUD()
 
