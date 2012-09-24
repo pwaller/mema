@@ -277,12 +277,8 @@ func main_loop(data *ProgramData) {
 		})
 
 		// Draw any text
-		glh.With(glh.Matrix{gl.PROJECTION}, func() {
-			gl.LoadIdentity()
-
+		glh.With(glh.WindowCoords{}, func() {
 			w, h := glh.GetViewportWH()
-			gl.Ortho(0, w, 0, h, -1, 1)
-			gl.Color4f(1, 1, 1, 1)
 
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Enable(gl.TEXTURE_2D)

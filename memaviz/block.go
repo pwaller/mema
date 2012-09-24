@@ -226,7 +226,7 @@ func (block *Block) Draw(start, N int64) {
 			//log.Printf("  h = %f -- %f", y1-y2, float64(int64(h)*N/(*nback))/(2.25*2- -2.1*2)*4)
 
 		})
-		glh.With(glh.WindowCoords{}, func() {
+		glh.With(glh.WindowCoords{Invert: true}, func() {
 			gl.Color4f(1, 1, 1, 1)
 			glh.With(block.tex, func() {
 				glh.DrawQuadd(x1, y1, x2-x1, y2-y1)
