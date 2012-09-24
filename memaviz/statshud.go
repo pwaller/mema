@@ -105,17 +105,9 @@ func InitStatsHUD() {
 	statistics.Add(&plots, "Alloc", "#FF6600", func() float64 { return float64(memstats.Alloc) })
 	statistics.Add(&plots, "Heap Alloc", "#006699", func() float64 { return float64(memstats.HeapAlloc) })
 	statistics.Add(&plots, "Sys", "#996699", func() float64 { return float64(memstats.Sys) })
-	statistics.Add(&plots, "System Free", "#3333ff", func() float64 {
-		total, free, buffers, cached := meminfo()
-		_, _ = total, buffers
-		return float64(free + cached)
-	})
-	statistics.Add(&plots, "nBlocks x 1e7", "#FFCC00", func() float64 {
-		return float64(nblocks * 1e6 * 10)
-	})
-	statistics.Add(&plots, "nDrawn x 1e7", "#9C8AA5", func() float64 {
-		return float64(blocks_rendered * 1e6 * 10)
-	})
+	statistics.Add(&plots, "System Free", "#3333ff", func() float64 { return float64(SystemFree()) })
+	statistics.Add(&plots, "nBlocks x 1e7", "#FFCC00", func() float64 { return float64(nblocks * 1e6 * 10) })
+	statistics.Add(&plots, "nDrawn x 1e7", "#9C8AA5", func() float64 { return float64(blocks_rendered * 1e6 * 10) })
 
 	go func() {
 		top := 0.
