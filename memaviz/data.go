@@ -12,47 +12,23 @@ import (
 	"strings"
 
 	"github.com/pwaller/go-clz4"
+
+	glh "github.com/pwaller/go-glhelpers"
 )
 
 type ProgramData struct {
 	filename string
 	region   []MemRegion
 	blocks   []*Block
-
-	b Block
-	//update              chan<- bool
-	//new_block_available <-chan *Block
-	//request_new_block   chan<- int
 }
 
 func NewProgramData(filename string) *ProgramData {
 	data := &ProgramData{}
 
-	data.b.full_data = data
-	/*
-		data.update := make(chan bool)
-
-		new_block_available := make(chan *Block)
-		data.new_block_available = new_block_available
-
-		go func() {
-			var new_blocks []*Block
-			for {
-				select {
-					case block := <- data.new_block_available:
-						new_blocks = append(new_blocks, block)
-					case <-data.update:
-						data.blocks = append(data.blocks, new_blocks...)
-						new_blocks = []*Block{}
-				}
-			}
-		}()
-	*/
-
 	data.filename = filename
 
 	fd, err := os.Open(filename)
-	defer fd.Close()
+	//defer fd.Close()
 	if err != nil {
 		log.Panic("Fatal error: ", err)
 	}
@@ -62,24 +38,28 @@ func NewProgramData(filename string) *ProgramData {
 	data.ParseHeader(reader)
 	data.ParsePageTable(reader)
 
-	// TODO: Stripe across the file to find where blocks are
-	// TODO: Load on demand sections which will be read
-	data.ParseBlocks(reader)
+	// TODO: Record block start offsets so that they can be jumped back to
 
-	//data.BlockParser(reader)
+	new_block := make(chan *Block)
+	go data.ParseBlocks(reader, new_block)
+	go func() {
+		current_context := make(Records, 0)
+		for b := range new_block {
+			b.full_data = data
+			b.context_records = current_context
+			if *use_stree {
+				b.stack_stree, current_context = b.BuildStree()
+			}
+			b.ActiveRegionIDs()
+			b.vertex_data = b.GenerateVertices()
 
-	// TODO: building the stree isn't going to work well with striping across file
-	log.Print("Loading stree.. ", len(data.b.records))
-	data.b.stack_stree = data.b.BuildStree()
-	log.Print("Loaded stree")
-
-	stack := (*data.b.stack_stree).Query(100, 100)
-	log.Print(" -- stree test:", stack)
-
-	active_regions := data.b.ActiveRegionIDs()
-	if *verbose {
-		log.Printf("Have %d active regions", len(active_regions))
-	}
+			main_thread_work <- func(b *Block) func() {
+				return func() {
+					data.blocks = append(data.blocks, b)
+				}
+			}(b)
+		}
+	}()
 
 	if *debug {
 		log.Print("Region info:")
@@ -91,17 +71,7 @@ func NewProgramData(filename string) *ProgramData {
 	return data
 }
 
-func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
-	for i := range data.region {
-		r := &data.region[i]
-		if r.low <= addr && addr < r.hi {
-			return r
-		}
-	}
-	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
-}
-
-func (data *ProgramData) ParseHeader(reader *bufio.Reader) {
+func (data *ProgramData) ParseHeader(reader io.Reader) {
 	magic_buf := make([]byte, 8)
 	_, err := reader.Read(magic_buf)
 	if err != nil || string(magic_buf) != "MEMACCES" {
@@ -142,17 +112,20 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 	}
 }
 
-func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
+var nblocks = int64(0)
+
+func (data *ProgramData) ParseBlocks(reader io.Reader, new_block chan<- *Block) {
 	// These buffers must have a maximum capacity which can fit whatever we 
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
-	input := make([]byte, 0, 20*1024*1024)
-	round_1 := make([]byte, 1, 20*1024*1024)
-	round_2 := make([]byte, 1, 20*1024*1024)
 
-	block := &data.b
+	input := make([]byte, 0, 10*1024*1024)
+	round_1 := make([]byte, 1, 10*1024*1024)
 
 	for {
+		BlockUnlessSpareRAM(100)
+
+		nblocks++
 		var block_size int64
 		err := binary.Read(reader, binary.LittleEndian, &block_size)
 		if err == io.EOF {
@@ -166,35 +139,76 @@ func (data *ProgramData) ParseBlocks(reader *bufio.Reader) {
 			log.Print("Reading block with size: ", block_size)
 		}
 
-		r := io.LimitReader(reader, block_size)
 		input = input[0:block_size]
-		n, err := io.ReadFull(r, input)
+		n, err := io.ReadFull(reader, input)
 
 		if int64(n) != block_size {
 			log.Panicf("Err = %q, expected %d, got %d", err, block_size, n)
 		}
+		// TODO: use known output size decompression
 		clz4.LZ4_uncompress_unknownOutputSize(input, &round_1)
-		clz4.LZ4_uncompress_unknownOutputSize(round_1, &round_2)
 
-		var records Records
-		records.FromBytes(round_2)
-		block.records = append(block.records, records...)
-		block.nrecords += int64(len(records))
+		block := &Block{}
 
-		// Read only a limited number of records > nrec, if set.
-		if *nrec != 0 && int64(block.nrecords) > *nrec {
-			break
-		}
+		block.records = make(Records, 10*1024*1024/56)
+		clz4.LZ4_uncompress_unknownOutputSize(round_1, block.records.AsBytes())
+		block.nrecords += int64(len(block.records))
+
+		new_block <- block
 	}
-	log.Print("Total records: ", block.nrecords)
 }
 
-func (d *ProgramData) RegionID(addr uint64) int {
-	for i := range d.region {
-		if d.region[i].low < addr && addr < d.region[i].hi {
-			return i
+func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
+	// TODO: More efficient implementation
+	for i := range data.region {
+		r := &data.region[i]
+		if r.low <= addr && addr < r.hi {
+			return r
 		}
 	}
-	//log.Panicf("Address 0x%x not in any defined memory region!", addr)
-	return len(d.region)
+	return &MemRegion{addr, addr, "-", "-", "-", "-", "unknown"}
+}
+
+func (data *ProgramData) Draw(start_index, n int64) {
+	// TODO: determine blocks which are visible on screen
+
+	nperblock := int64(10 * 1024 * 1024 / 56)
+	start_block := start_index / nperblock
+	if start_block < 0 {
+		start_block = 0
+	}
+	n_blocks := n/nperblock + 2
+	if n_blocks < 1 {
+		n_blocks = 1
+	}
+	if start_block+n_blocks >= int64(len(data.blocks)) {
+		n_blocks = int64(len(data.blocks)) - start_block
+	}
+
+	glh.With(&Timer{Name: "DrawBlocks"}, func() {
+		for i := range ints(start_block, n_blocks) {
+			b := data.blocks[i]
+			from, N := start_index-int64(i)*b.nrecords, b.nrecords
+			b.Draw(from, N)
+		}
+	})
+}
+
+func (data *ProgramData) GetRecord(i int64) *Record {
+	// TODO: determine block from `i`
+	return nil
+	if i >= 0 && i < data.blocks[0].nrecords {
+		return &data.blocks[0].records[i]
+	}
+	return nil
+}
+
+func (data *ProgramData) GetStackNames(i int64) []string {
+	records_per_block := (int64)(10 * 1024 * 1024 / 56)
+	block_index := i / records_per_block
+	internal_index := i % records_per_block
+	if block_index >= 0 && block_index < int64(len(data.blocks)) {
+		return data.blocks[block_index].GetStackNames(internal_index)
+	}
+	return []string{}
 }

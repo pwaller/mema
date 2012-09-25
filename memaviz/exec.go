@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/toberndo/go-stree/stree"
+	"github.com/JohannesEbke/go-stree/stree"
 )
 
 type MemRegion struct {
