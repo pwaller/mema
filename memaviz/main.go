@@ -156,6 +156,9 @@ func main_loop(data *ProgramData) {
 		rec_actual_after := i + int64(constpart*float64(*nback))
 		delta := rec_actual_after - rec_actual
 		i -= delta
+
+		// Ensure the mouse cursor position doesn't change when zooming
+		rec = rec_actual - i
 	})
 
 	update_text := func() {
