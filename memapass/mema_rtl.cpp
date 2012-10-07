@@ -1,6 +1,6 @@
 // TODO: Take license from other project
 
-//#include <iostream>
+#include <iostream>
 
 #include <cassert>
 #include <unordered_set>
@@ -17,6 +17,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cxxabi.h>
+
+#include <pthread.h>
 
 #include "lz4.h"
 
@@ -158,40 +160,54 @@ typedef struct {
 
 static bool mema_initialized = false;
 
-static const char *kMemaModuleCtorName = "mema.module_ctor";
-static const char *kMemaInitName = "__mema_init";
+// Approximate size of round-robin buffer
+const unsigned int bufsize_MB = 10;
+const unsigned int mem_accesses_bufsize = bufsize_MB*1024*1024 / sizeof(MemAccess);
 
-// Constant chosen to fit inside 10MB
-const unsigned int mem_accesses_bufsize = 10*1024*1024 / sizeof(MemAccess);
+__thread static bool thread_initialized = false;
+__thread static bool inside_mema = false;
 
-// TODO: think of threadsafe way of doing this.. Can haz threadlocal?
-static MemAccess mem_accesses[mem_accesses_bufsize];
-static MemAccess * next_free_mem_access = &mem_accesses[0];
+__thread static MemAccess mem_accesses[mem_accesses_bufsize];
+__thread static MemAccess  *first_mem_access = NULL,
+                           *next_free_mem_access = NULL,
+                           *last_mem_access = NULL;
 
-static const MemAccess * first_mem_access = &mem_accesses[0],
-                       * last_free_mem_access = 
-                                        &mem_accesses[mem_accesses_bufsize - 1];
+pthread_mutex_t write_mutex = PTHREAD_MUTEX_INITIALIZER,
+                initialize_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+class Lock {
+  public:
+    pthread_mutex_t* _mutex;
+    Lock(pthread_mutex_t* m) : _mutex(m) {
+      pthread_mutex_lock(_mutex);
+    }
+    ~Lock() {
+      pthread_mutex_unlock(_mutex);
+    }
+};
 
 static int memaccess_fd = -1;
 
 unsigned long total_uncompressed_size = 0;
 unsigned long total_compressed_size = 0;
 
-static bool monitor_func = false;
 static std::set<uptr> monitor_func_addresses;
-static int monitor_func_entry_count = 0;
+__thread static bool monitor_func = false;
+__thread static int monitor_func_entry_count = 0;
 
+// This function can be run in multiple threads simultaneously.
 void __mema_empty_buffer() {
-  // Protect against self-examination
-  mema_initialized = false; // TODO: This will not work in a threaded environment
+
+  std::cout << "__mema_empty_buffer()" << std::endl;
+
   if (memaccess_fd == -1) {
+    // We're not currently writing, just reset the buffer.
     next_free_mem_access = &mem_accesses[0];
     return;
   }
 
-  // TODO: Could write out a summary of the addresses/pages accessed in this 
-  // block
-  
+  inside_mema = true;
+
   const size_t n_records = next_free_mem_access - first_mem_access;
   const size_t uncompressed_size = sizeof(mem_accesses[0]) * n_records;
   
@@ -203,10 +219,11 @@ void __mema_empty_buffer() {
   }
   
   if (flags()->compression) {
+    // TODO: use statically allocated memory for `compressed` and `compressed1`
+
     size_t len = LZ4_compressBound(uncompressed_size);
     char * compressed = new char[len];
     size_t compressed_size = 0;
-    //snappy::RawCompress
     
     compressed_size = LZ4_compress(
       uncompressed_data,
@@ -216,22 +233,27 @@ void __mema_empty_buffer() {
     char * compressed1 = new char[len1];
     size_t compressed_size1 = 0;
     compressed_size1 = LZ4_compress(compressed, compressed1, compressed_size);
-
-    uptr r = write(memaccess_fd, 
-      reinterpret_cast<void *>(&compressed_size1),
-      sizeof(compressed_size));
-                   
-    uptr r1 = write(memaccess_fd, compressed1, compressed_size1);
-
-    total_uncompressed_size += sizeof(compressed_size) + uncompressed_size;
-    total_compressed_size += sizeof(compressed_size) + compressed_size1;
     
-    //Report("memaccess: Compressed size: %d (max %d) %p %p\n", compressed_size, len, r, r1);
-    if ((size_t)r1 != compressed_size1) {
-      printf("Failure: %zd != %zd\n", r1, compressed_size1);
+    {
+      Lock l(&write_mutex);
+
+      uptr r = write(memaccess_fd, 
+        reinterpret_cast<void *>(&compressed_size1),
+        sizeof(compressed_size));
+                     
+      uptr r1 = write(memaccess_fd, compressed1, compressed_size1);
+
+      total_uncompressed_size += sizeof(compressed_size) + uncompressed_size;
+      total_compressed_size += sizeof(compressed_size) + compressed_size1;
+
+      if ((size_t)r1 != compressed_size1) {
+        printf("Failure: %zd != %zd\n", r1, compressed_size1);
+      }
+      
+      assert((size_t)r1 == compressed_size1);
     }
     
-    assert((size_t)r1 == compressed_size1);
+    //Report("memaccess: Compressed size: %d (max %d) %p %p\n", compressed_size, len, r, r1);
     //PrintBytes("  ", (uptr*)(compressed+0*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+1*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+2*kWordSize));
@@ -242,7 +264,8 @@ void __mema_empty_buffer() {
       printf("memaccess: Emptying memaccess buffer, uncompressed = %zd compressed = %zd compressed1 = %zd\n", 
              uncompressed_size, compressed_size, compressed_size1);
   } else {
-    
+    Lock l(&write_mutex);
+
     uptr r = write(memaccess_fd, 
       reinterpret_cast<const void *>(&uncompressed_size),
       sizeof(uncompressed_size));
@@ -250,12 +273,10 @@ void __mema_empty_buffer() {
     uptr r1 = write(memaccess_fd, uncompressed_data, uncompressed_size);
       printf("memaccess: Emptying memaccess buffer, uncompressed = %zd\n", 
              uncompressed_size);
-    
   }
-  
     
   next_free_mem_access = &mem_accesses[0];
-  mema_initialized = true; // TODO: This will not work in a threaded environment
+  inside_mema = false;
 }
 
 extern "C" {
@@ -265,7 +286,7 @@ void __mema_disable() { if (flags()->verbosity) printf("__mema_disable()\n"); fl
 
 
 void __mema_function_entry(uptr addr) {
-  if (!mema_initialized) return;
+  if (!mema_initialized || inside_mema) return;
 
   if (monitor_func) {
     bool stash = flags()->disable;
@@ -286,19 +307,21 @@ void __mema_function_entry(uptr addr) {
 
   GET_CALLER_PC_BP_SP;
   
+  //std::cout << "Function enter: " << &mem_accesses[0] << " - " << first_mem_access << " - " << next_free_mem_access << std::endl;
+
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_FUNC_ENTER;
   //f.acc.pc = pc; f.acc.bp = bp; f.acc.sp = sp;
   f.func.addr = addr;
   
   // Round-robbin buffer
-  if (next_free_mem_access == last_free_mem_access) {
+  if (next_free_mem_access == last_mem_access) {
       __mema_empty_buffer();
   }
 }
 
 void __mema_function_exit(uptr addr) {
-  if (!mema_initialized) return;
+  if (!mema_initialized || inside_mema) return;
 
   if (monitor_func) {
     bool stash = flags()->disable;
@@ -318,25 +341,25 @@ void __mema_function_exit(uptr addr) {
   if (flags()->disable) return;
   
   GET_CALLER_PC_BP_SP;
+
+  //std::cout << "Function exit: " << &mem_accesses[0] << " - " << next_free_mem_access << std::endl;
   
   MemAccess & f = *(next_free_mem_access++);
   f.type = MEMA_FUNC_EXIT;
   f.func.addr = addr;
   
   // Round-robbin buffer
-  if (next_free_mem_access == last_free_mem_access) {
+  if (next_free_mem_access == last_mem_access) {
       __mema_empty_buffer();
   }
 }
 
-
 void __mema_access(uptr addr, char size, bool is_write) {
-  if (!mema_initialized || flags()->disable) return;
-  
-  //if (addr_in_buf.insert(addr).second) return;// Only do this once per buffer clearing
   
   // TODO: something with the size variable?
   GET_CALLER_PC_BP_SP;
+
+  if (inside_mema || !mema_initialized || flags()->disable) return;
   
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -350,7 +373,7 @@ void __mema_access(uptr addr, char size, bool is_write) {
   f.acc.is_write = is_write;
   
   // Round-robbin buffer
-  if (next_free_mem_access == last_free_mem_access) {
+  if (next_free_mem_access == last_mem_access) {
     __mema_empty_buffer();
   }
 }
@@ -366,75 +389,57 @@ void __mema_finalize() {
   printf("Total bytes written (uncompressed): %li\n", total_uncompressed_size);
 }
 
-void __mema_initialize() {
-  //std::cout << "mema_initialize()" << std::endl;
-  if (mema_initialized) return;
-  mema_initialized = true;
-  printf("mema_initialize()\n");
-  
-  // Initialize flags.
-  const char *options = getenv("MEMA_OPTIONS");
-  InitializeFlags(flags(), options);
-    
-  if (!flags()->filename) {
-    printf("memaccess_filename not set\n");
-    return;
-  }
-  
-  if (flags()->funcname) {
-    char * command = (char*)calloc(sizeof(char), (1024+3+1));
-    command[0] = 'n';
-    command[1] = 'm';
-    command[2] = ' ';
-    int exe_len = readlink("/proc/self/exe", command + 3, 1024);
-    if (exe_len == -1) {
-        perror("cannot read executable for function name discovery");
-        return;
-    }
-    if (exe_len >= 1024) {
-        printf("executable name > 1024 chars!");
-        return;
-    }
-    printf("Executing command '%s'\n", command);
-    FILE* pipe = popen(command, "r");
-    if (pipe == NULL) {
-        perror("Failed to extract symbols from executable file");
-        return;
-    }
-    char * line = NULL;
-    size_t n;
-    while (1) {
-        int sz = getline(&line, &n, pipe);
-        if (sz == 0 or sz == -1) break;
-        line[sz-2] = '\0'; // kill newline
+void __mema_intialize_function_monitoring() {
+  // PORTABILITY
 
-        int status;
-        char * realname = abi::__cxa_demangle(line+19, 0, 0, &status);
-        //printf("%s demangled to %s\n", line+19, realname);
-        if (status == 0 and fnmatch(flags()->funcname, realname, 0) == 0) {
-            printf("Monitoring function '%s'\n", realname);
-            monitor_func_addresses.insert(strtol(line, 0, 16));
-        }
-        free(realname);
-        free(line);
-        line = NULL;
-    }
-    if (monitor_func_addresses.size() == 0) {
-        printf("No function matching '%s' found! Mema disabled.\n", flags()->funcname);
-        return;
-    }
-    monitor_func = true;
-    __mema_disable(); // disable mema at first
+  char * command = (char*)calloc(sizeof(char), (1024+3+1));
+  command[0] = 'n';
+  command[1] = 'm';
+  command[2] = ' ';
+  int exe_len = readlink("/proc/self/exe", command + 3, 1024);
+  if (exe_len == -1) {
+      perror("cannot read executable for function name discovery");
+      return;
   }
-  
-  memaccess_fd = open(flags()->filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-  
-  write(memaccess_fd, "MEMACCES", 8); // magic bytes
-  total_uncompressed_size += 8;
-  total_compressed_size += 8;
-  
-  printf("Will write memaccess data to %s..\n", flags()->filename);
-  
+  if (exe_len >= 1024) {
+      printf("executable name > 1024 chars!");
+      return;
+  }
+  printf("Executing command '%s'\n", command);
+  FILE* pipe = popen(command, "r");
+  if (pipe == NULL) {
+      perror("Failed to extract symbols from executable file");
+      return;
+  }
+  char * line = NULL;
+  size_t n;
+  while (1) {
+      int sz = getline(&line, &n, pipe);
+      if (sz == 0 or sz == -1) break;
+      line[sz-2] = '\0'; // kill newline
+
+      int status;
+      char * realname = abi::__cxa_demangle(line+19, 0, 0, &status);
+      //printf("%s demangled to %s\n", line+19, realname);
+      if (status == 0 and fnmatch(flags()->funcname, realname, 0) == 0) {
+          printf("Monitoring function '%s'\n", realname);
+          monitor_func_addresses.insert(strtol(line, 0, 16));
+      }
+      free(realname);
+      free(line);
+      line = NULL;
+  }
+  if (monitor_func_addresses.size() == 0) {
+      printf("No function matching '%s' found! Mema disabled.\n", flags()->funcname);
+      return;
+  }
+  monitor_func = true;
+  __mema_disable(); // disable mema at first  
+}
+
+void __mema_write_initial_maps(int fd) {  
+  // PORTABILITY
+
   int maps_fd = open("/proc/self/maps", false);
   int bytes_read = 0;
   
@@ -449,10 +454,82 @@ void __mema_initialize() {
   } while (bytes_read > 0);  
   
   write(memaccess_fd, "\0", 1);    
-    atexit(__mema_finalize);
+  
   total_uncompressed_size += 1;
   total_compressed_size += 1;
+}
 
+void __mema_write_header(int fd) {
+  printf("Will write memaccess data to %s..\n", flags()->filename);
+
+  write(memaccess_fd, "MEMACCES", 8); // magic bytes
+  total_uncompressed_size += 8;
+  total_compressed_size += 8;
+
+  __mema_write_initial_maps(fd);
+}
+
+void __mema_thread_finishing() {
+  std::cout << "Finalizing on thread " << (void*)pthread_self() << std::endl;
+  __mema_empty_buffer();
+}
+
+void __mema_pthread_finishing(void*) {
+  printf("__mema_pthread_finishing() thread=%p\n", (void*)pthread_self());
+  __mema_thread_finishing();
+}
+
+__thread pthread_key_t thread_destructor_key;
+
+static void __mema_thread_starting() {
+  printf("__mema_thread_starting() thread=%p\n", (void*)pthread_self());
+  pthread_key_create(&thread_destructor_key, __mema_pthread_finishing);
+
+  first_mem_access = &mem_accesses[0];
+  next_free_mem_access = first_mem_access;
+  last_mem_access = &mem_accesses[mem_accesses_bufsize - 1];
+}
+
+void __mema_initialize_thread_hooking() {
+  // PORTABILITY
+  printf("__mema_initialize_thread_hooking()\n");
+  int r = pthread_atfork(NULL, NULL, &__mema_thread_starting);
+  printf("  atfork result = %d\n", r);
+}
+
+void __mema_initialize() {
+  Lock l(&initialize_mutex);
+
+  if (mema_initialized) return;
+  mema_initialized = true;
+
+  first_mem_access = &mem_accesses[0];
+  next_free_mem_access = first_mem_access;
+  last_mem_access = &mem_accesses[mem_accesses_bufsize - 1];
+
+  // NOTE: this doesn't work. We probably have to interpose our own pthread_create.
+  __mema_initialize_thread_hooking();
+
+  printf("__mema_initialize()\n");
+  
+  // Initialize flags.
+  const char *options = getenv("MEMA_OPTIONS");
+  InitializeFlags(flags(), options);
+    
+  if (!flags()->filename) {
+    printf("  memaccess_filename not set\n");
+    return;
+  }
+  
+  if (flags()->funcname) {
+    __mema_intialize_function_monitoring();
+  }
+  
+  memaccess_fd = open(flags()->filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  
+  __mema_write_header(memaccess_fd);
+
+  atexit(__mema_finalize);
 }
 
 }

@@ -28,7 +28,15 @@
 
 #include "llvm/Support/raw_ostream.h"
 
-#include "llvm/Support/IRBuilder.h"
+#include "llvm/Config/config.h"
+#if LLVM_VERSION_MAJOR < 3
+  #error "Unsupported LLVM version"
+#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR < 2
+  #include "llvm/Support/IRBuilder.h"
+#else
+  #include "llvm/IRBuilder.h"
+#endif
+
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
 #include <vector>
