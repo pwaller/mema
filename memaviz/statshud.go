@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pwaller/go-gpuinfo"
 	"github.com/pwaller/go-memhelper"
 
 	"github.com/pwaller/go-chart"
@@ -64,6 +65,19 @@ func (s *Statistics) Update() float64 {
 		}
 		p := chart.EPoint{X: float64(now.UnixNano()),
 			Y: value, DeltaX: math.NaN(), DeltaY: math.NaN()}
+		/*
+			if len(*stat.Samples) > 1024 {
+				const (
+					STRIDE      = 8
+					KEEP_AMOUNT = 256
+				)
+				keep := make([]chart.EPoint, KEEP_AMOUNT/STRIDE)
+				for i := 0; i < KEEP_AMOUNT; i += STRIDE {
+					keep[i/STRIDE] = (*stat.Samples)[i]
+				}
+				*stat.Samples = append(keep, (*stat.Samples)[KEEP_AMOUNT:]...)
+			}
+		*/
 		*stat.Samples = append(*stat.Samples, p)
 	}
 	return max
@@ -86,6 +100,8 @@ func InitStatsHUD() {
 	plots.XRange.TicSetting.Mirror, plots.YRange.TicSetting.Mirror = 2, 2
 	plots.XRange.TicSetting.Grid, plots.YRange.TicSetting.Grid = 2, 2
 
+	plots.YRange.ShowZero = true
+
 	//plots.XRange.Log = true
 	//plots.YRange.Log = true
 
@@ -98,9 +114,19 @@ func InitStatsHUD() {
 
 	memhelper.GetMaxRSS()
 
+	var gpufree float64
+
+	gpupoll := gpuinfo.PollGPUMemory()
+	go func() {
+		for gpustatus := range gpupoll {
+			gpufree = float64(memhelper.ByteSize(gpustatus.Free()) * memhelper.MiB)
+		}
+	}()
+
 	statistics := &Statistics{}
+	statistics.Add(&plots, "GPU Free", "#FF9F00", func() float64 { return gpufree })
 	statistics.Add(&plots, "SpareRAM()", "#ff0000", func() float64 { return float64(SpareRAM() * 1e6) })
-	statistics.Add(&plots, "MaxRSS", "#33ff33", func() float64 { return float64(memhelper.GetMaxRSS()) })
+	statistics.Add(&plots, "MaxRSS", "#FFE240", func() float64 { return float64(memhelper.GetMaxRSS()) })
 	statistics.Add(&plots, "Heap Idle", "#33ff33", func() float64 { return float64(memstats.HeapIdle) })
 	statistics.Add(&plots, "Alloc", "#FF6600", func() float64 { return float64(memstats.Alloc) })
 	statistics.Add(&plots, "Heap Alloc", "#006699", func() float64 { return float64(memstats.HeapAlloc) })
@@ -114,13 +140,13 @@ func InitStatsHUD() {
 
 		i := -1
 		for {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			max := statistics.Update()
 			if max > top {
 				top = max
 			}
 			i++
-			if i%100 != 0 {
+			if i%4 != 0 {
 				continue
 			}
 
@@ -141,15 +167,15 @@ func InitStatsHUD() {
 
 	const pw, ph = 640, 480
 
-	scale := 0.5
+	scalex, scaley := 0.4, 0.5
 
 	chart_gfxcontext := openglg.New(pw, ph, "", 10, color.RGBA{})
 
 	StatsHUD = func() {
 		glh.With(glh.Matrix{gl.PROJECTION}, func() {
 			gl.LoadIdentity()
-			gl.Translated(1-scale, scale-1, 0)
-			gl.Scaled(scale, scale, 1)
+			gl.Translated(1-scalex, scaley-1, 0)
+			gl.Scaled(scalex, scaley, 1)
 			gl.Ortho(0, pw, ph, 0, -1, 1)
 			gl.Translated(0, -50, 0)
 
@@ -162,13 +188,14 @@ func InitStatsHUD() {
 		})
 	}
 
+	// TODO: figure out why this is broken
 	DumpStatsHUD = func() {
-
 		s2f, _ := os.Create("statshud-dump.svg")
 		mysvg := svg.New(s2f)
 		mysvg.Start(1600, 800)
 		mysvg.Rect(0, 0, 2000, 800, "fill: #ffffff")
-		sgr := svgg.New(mysvg, 2000, 800, "Arial", 18, color.RGBA{0xff, 0xff, 0xff, 0xff})
+		sgr := svgg.New(mysvg, 2000, 800, "Arial", 18,
+			color.RGBA{0xff, 0xff, 0xff, 0xff})
 		sgr.Begin()
 
 		plots.Plot(sgr)
@@ -179,5 +206,5 @@ func InitStatsHUD() {
 		log.Print("Saved statshud-dump.svg")
 	}
 
-	log.Print("InitStatsHUD()")
+	//log.Print("InitStatsHUD()")
 }
