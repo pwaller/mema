@@ -363,10 +363,37 @@ func main() {
 		defer log.Print("Shutdown")
 	}
 
-	data := NewProgramData(flag.Arg(0))
+	var data *ProgramData
+	var action = "visualize"
 
-	cleanup := make_window(1280, 768, "Memory Accesses")
-	defer cleanup()
+	switch flag.NArg() {
+	default:
+		flag.Usage()
+		println()
+		println("memaviz [action] filename.mema")
+		println("  actions:")
+		println("    pack")
+		println()
+		return
+	case 1:
+		data = NewProgramData(flag.Arg(0))
 
-	main_loop(data)
+	case 2:
+		action = flag.Arg(0)
+		data = NewProgramData(flag.Arg(1))
+	}
+
+	switch action {
+	case "visualize":
+		cleanup := make_window(1280, 768, "Memory Accesses")
+		defer cleanup()
+
+		InitStatsHUD()
+		main_loop(data)
+	case "pack":
+		data.PackBinaries()
+
+	default:
+		log.Fatal("Unknown action: %q", action)
+	}
 }

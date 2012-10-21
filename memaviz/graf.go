@@ -5,12 +5,25 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/banthar/gl"
-	"github.com/jteeuwen/glfw"
+	"github.com/go-gl/gl"
+	"github.com/go-gl/glfw"
+)
+
+var MaxAnisotropy float32
+
+const (
+	GL_TEXTURE_MAX_ANISOTROPY_EXT     = 0x84FE
+	GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF
 )
 
 func Init() {
 	//gl.Enable(gl.DEPTH_TEST)
+
+	var tmpmaxa []float32 = []float32{0}
+
+	gl.GetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, tmpmaxa)
+	MaxAnisotropy = tmpmaxa[0]
+	log.Print("MaxAnisotropy: ", MaxAnisotropy)
 
 	// Anti-aliasing
 	gl.Enable(gl.LINE_SMOOTH)
@@ -19,6 +32,7 @@ func Init() {
 	//gl.BlendFunc(gl.SRC_ALPHA, gl.DST_ALPHA)
 	//gl.BlendFunc(gl.SRC_ALPHA_SATURATE, gl.ONE)
 	gl.Hint(gl.LINE_SMOOTH_HINT, gl.NICEST)
+	gl.Hint(gl.GENERATE_MIPMAP_HINT, gl.NICEST)
 
 	extensions := gl.GetString(gl.EXTENSIONS)
 	if !strings.Contains(extensions, "GL_ARB_framebuffer_object") {
