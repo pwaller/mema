@@ -2,22 +2,22 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"math"
 	"os"
 	"time"
 
-	"github.com/pwaller/go-gpuinfo"
+	"github.com/pwaller/go-hexcolor"
 	"github.com/pwaller/go-memhelper"
 
-	"github.com/pwaller/go-chart"
-	"github.com/pwaller/go-chart/openglg"
-
 	"github.com/ajstarks/svgo"
-	"github.com/pwaller/go-chart/svgg"
-	"image/color"
+	"github.com/vdobler/chart"
+	"github.com/vdobler/chart/svgg"
 
 	"github.com/go-gl/gl"
+	"github.com/go-gl/glchart"
+	"github.com/go-gl/gldebug/gpuinfo"
 	"github.com/go-gl/glh"
 )
 
@@ -43,11 +43,13 @@ type Statistic struct {
 }
 type Statistics []Statistic
 
-func (s *Statistics) Add(c *chart.ScatterChart, name, color string, eval func() float64) {
+func (s *Statistics) Add(c *chart.ScatterChart, name, col string, eval func() float64) {
 	xs, ys := []float64{}, []float64{}
 
+	rgbac := color.RGBAModel.Convert(hexcolor.Hex(col))
+
 	c.AddDataPair(name, xs, ys, chart.PlotStyleLines,
-		chart.Style{LineColor: color, LineWidth: 1, Alpha: 1})
+		chart.Style{LineColor: rgbac, LineWidth: 1})
 
 	*s = append(*s, Statistic{Eval: eval})
 	for i := range c.Data {
@@ -87,7 +89,7 @@ var StatsHUD = func() {}
 var DumpStatsHUD = func() {}
 
 func InitStatsHUD() {
-	plots := chart.ScatterChart{Title: "", Options: openglg.DarkStyle}
+	plots := chart.ScatterChart{Title: "", Options: glchart.DarkStyle}
 	start := time.Now()
 
 	l := float64(start.UnixNano())
@@ -132,8 +134,8 @@ func InitStatsHUD() {
 	statistics.Add(&plots, "Heap Alloc", "#006699", func() float64 { return float64(memstats.HeapAlloc) })
 	statistics.Add(&plots, "Sys", "#996699", func() float64 { return float64(memstats.Sys) })
 	statistics.Add(&plots, "System Free", "#3333ff", func() float64 { return float64(SystemFree()) })
-	statistics.Add(&plots, "nBlocks x 1e7", "#FFCC00", func() float64 { return float64(nblocks * 1e6 * 10) })
-	statistics.Add(&plots, "nDrawn x 1e7", "#9C8AA5", func() float64 { return float64(blocks_rendered * 1e6 * 10) })
+	statistics.Add(&plots, "nBlocks x 1e6", "#FFCC00", func() float64 { return float64(nblocks * 1e6) })
+	statistics.Add(&plots, "nDrawn x 1e6", "#9C8AA5", func() float64 { return float64(blocks_rendered * 1e6) })
 
 	go func() {
 		top := 0.
@@ -169,7 +171,7 @@ func InitStatsHUD() {
 
 	scalex, scaley := 0.4, 0.5
 
-	chart_gfxcontext := openglg.New(pw, ph, "", 10, color.RGBA{})
+	chart_gfxcontext := glchart.New(pw, ph, "", 10, color.RGBA{})
 
 	StatsHUD = func() {
 		glh.With(glh.Matrix{gl.PROJECTION}, func() {

@@ -355,7 +355,7 @@ func main() {
 	go FailSafe()
 
 	if *profiling {
-		go func() { http.ListenAndServe(":6060", nil) }()
+		go func() { log.Println(http.ListenAndServe(":6060", nil)) }()
 	}
 
 	if *verbose {

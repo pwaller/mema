@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"image/color"
 	"log"
 	"runtime"
 	"sort"
@@ -121,7 +122,6 @@ func (block *Block) ActiveRegionIDs() {
 }
 
 func (block *Block) BuildTexture() {
-
 	block.tex = glh.NewTexture(1024, 256)
 	block.tex.Init()
 
@@ -246,7 +246,7 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 	var vc glh.ColorVertices
 
 	if *pageboundaries {
-		boundary_color := glh.Color{64, 64, 64, 255}
+		boundary_color := color.RGBA{64, 64, 64, 255}
 
 		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
 			for p := uint64(0); p <= width; p += *PAGE_SIZE {
@@ -352,14 +352,14 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 			stack_depth++
 
 			y := float32(int64(len(*vc)))
-			c := glh.Color{64, 64, 255, 255}
+			c := color.RGBA{64, 64, 255, 255}
 			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
 
 			continue
 		} else if r.Type == MEMA_FUNC_EXIT {
 
 			y := float32(int64(len(*vc)))
-			c := glh.Color{255, 64, 64, 255}
+			c := color.RGBA{255, 64, 64, 255}
 			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
 
 			stack_depth--
@@ -384,7 +384,7 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 
 		y := float32(len(*vc))
 
-		c := glh.Color{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
+		c := color.RGBA{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
 
 		vc.Add(glh.ColorVertex{c, glh.Vertex{x, y}})
 
