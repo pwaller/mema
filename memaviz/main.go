@@ -44,8 +44,8 @@ var margin_factor = float32(1) //0.975)
 // Redraw
 var Draw func() = nil
 
-// 100 = it's possible to schedule 100 actions per frame
-var main_thread_work chan func() = make(chan func(), 1000)
+// 10 = it's possible to schedule 100 actions per frame
+var main_thread_work chan func() = make(chan func(), 10)
 
 func DoMainThreadWork() {
 	// Run all work scheduled for the main thread
@@ -136,7 +136,7 @@ func main_loop(data *ProgramData) {
 		} else {
 			*nback = 40 * 1024 >> uint(pos)
 		}
-		log.Print("Mousewheel position: ", pos, " nback: ", *nback)
+		//log.Print("Mousewheel position: ", pos, " nback: ", *nback)
 
 		if rec == 0 {
 			return
@@ -258,12 +258,7 @@ func main_loop(data *ProgramData) {
 		}
 	})
 
-	Draw = func() {
-
-		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-		// Draw the memory access/function data
-		data.Draw(i, *nback)
+	draw_mousepoint := func() {
 
 		// Draw the mouse point
 		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
@@ -277,10 +272,12 @@ func main_loop(data *ProgramData) {
 				gl.Vertex3d(mousepx, 0, 0)
 			})
 		})
+	}
 
+	draw_text := func() {
 		// Draw any text
 		glh.With(glh.WindowCoords{}, func() {
-			w, h := glh.GetViewportWH()
+			w, h := glh.GetViewportWHD()
 
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Enable(gl.TEXTURE_2D)
@@ -296,6 +293,17 @@ func main_loop(data *ProgramData) {
 				}
 			})
 		})
+	}
+
+	Draw = func() {
+
+		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+		// Draw the memory access/function data
+		data.Draw(i, *nback)
+
+		draw_mousepoint()
+		draw_text()
 
 		// Visible region quad
 		// gl.Color4f(1, 1, 1, 0.25)
@@ -332,9 +340,9 @@ func main_loop(data *ProgramData) {
 func FailSafe() {
 	for {
 		time.Sleep(1 * time.Microsecond)
-		if SystemFree() < 400e6 {
+		if SystemFree() < 200e6 {
 			DumpStatsHUD()
-			log.Fatal("Less than 400MB system RAM free. Aborting")
+			log.Fatal("Less than 200MB system RAM free. Aborting")
 		}
 	}
 }
@@ -342,13 +350,9 @@ func FailSafe() {
 func main() {
 	flag.Parse()
 
+	log.SetFlags(log.Ltime | log.Lshortfile)
+
 	go FailSafe()
-
-	InitStatsHUD()
-
-	if flag.NArg() != 1 {
-		log.Fatal("Wrong number of arguments, expected 1, got ", flag.NArg())
-	}
 
 	if *profiling {
 		go func() { http.ListenAndServe(":6060", nil) }()

@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/JohannesEbke/go-stree/stree"
 
@@ -14,6 +15,7 @@ import (
 
 type Block struct {
 	nrecords        int64
+	detail_needed   bool
 	records         Records
 	context_records Records
 	vertex_data     *glh.ColorVertices
@@ -25,9 +27,16 @@ type Block struct {
 	tex *glh.Texture
 	img *image.RGBA
 
-	full_data *ProgramData
+	full_data   *ProgramData
+	file_offset int64
+
+	requests struct {
+		texture, vertices sync.Once
+	}
 	// Texture
 }
+
+const WIDTH = 4.25
 
 func (block *Block) ActiveRegionIDs() {
 	page_activity := make(map[uint64]uint)
@@ -58,7 +67,7 @@ func (block *Block) ActiveRegionIDs() {
 	block.n_inactive_to_left = make(map[uint64]uint64)
 
 	// Copy active pages from past `Nblockpast` blocks
-	Nblockpast := 10
+	Nblockpast := 0
 	for i := 2; i < Nblockpast; i++ {
 		blocks := *&block.full_data.blocks
 		j := len(blocks) - i
@@ -82,8 +91,6 @@ func (block *Block) ActiveRegionIDs() {
 		block.active_pages[page] = true
 		block.display_active_pages[page] = true
 	}
-
-	//log.Print("Quiet pages: ", len(block.quiet_pages), " active: ", len(block.active_pages))
 
 	// Build list of pages which are active, count active pages to the left
 	active_pages := make([]uint64, len(block.display_active_pages))
@@ -111,76 +118,124 @@ func (block *Block) ActiveRegionIDs() {
 		total_inactive_to_left += inactive_to_left - 1
 		block.n_inactive_to_left[p] = total_inactive_to_left
 	}
-
-	//return result
 }
 
-func (block *Block) BuildVertexData() {
-	log.Print("BuildVertexData()")
-	block.tex = glh.NewTexture(2048, 400)
+func (block *Block) BuildTexture() {
+
+	block.tex = glh.NewTexture(1024, 256)
 	block.tex.Init()
 
-	glh.With(&glh.Framebuffer{Texture: block.tex}, func() {
+	// TODO: use runtime.SetFinalizer() to clean up/delete the texture?
+	glh.With(block.tex, func() {
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
 
-		glh.With(glh.Attrib{gl.COLOR_BUFFER_BIT}, func() {
-			gl.ClearColor(0, 0, 0, 1)
-			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		})
-		glh.With(glh.Compound(glh.Attrib{gl.VIEWPORT_BIT}, glh.Matrix{gl.PROJECTION}), func() {
-			gl.Viewport(0, 0, block.tex.W, block.tex.H)
-			gl.LoadIdentity()
-			//gl.Ortho(0, float64(tex.w), 0, float64(tex.h), -1, 1)
-			gl.Ortho(-2, 2, 2, -2, -1, 1)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 
-			glh.With(glh.Matrix{gl.MODELVIEW}, func() {
-				gl.LoadIdentity()
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+		// TODO: Only try and activate anisotropic filtering if it is available
 
-				gl.PointSize(1)
-				glh.With(glh.Matrix{gl.MODELVIEW}, func() {
-					gl.Translated(0, -2, 0)
-					gl.Scaled(1, 4/float64(block.nrecords), 1)
-
-					block.vertex_data.Draw(gl.POINTS)
-				})
-
-				/*
-					gl.Color4f(0.5, 0.5, 1, 1)
-					With(Primitive{gl.LINE_LOOP}, func() {
-						b := 0.2
-						Squared(-2.1+b, -2.1+b, 4.35-b*2, 4.2-b*2)
-					})
-				*/
-			})
-		})
+		gl.TexParameterf(gl.TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, MaxAnisotropy)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, 1)
 	})
 
-	block.img = block.tex.AsImage()
-	block.vertex_data = nil
-	block.records = Records{}
+	for i := 0; i < 2; i++ {
+		glh.With(&glh.Framebuffer{Texture: block.tex, Level: i}, func() {
+			glh.With(glh.Attrib{gl.COLOR_BUFFER_BIT}, func() {
+				gl.ClearColor(1, 0, 0, 0)
+				gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+			})
+			viewport_proj := glh.Compound(glh.Attrib{gl.VIEWPORT_BIT},
+				glh.Matrix{gl.PROJECTION})
+
+			glh.With(viewport_proj, func() {
+				gl.Viewport(0, 0, block.tex.W/(1<<uint(i)), block.tex.H/(1<<uint(i)))
+				gl.LoadIdentity()
+				//gl.Ortho(0, float64(tex.w), 0, float64(tex.h), -1, 1)
+				gl.Ortho(-2, -2+WIDTH, 2, -2, -1, 1)
+
+				glh.With(glh.Matrix{gl.MODELVIEW}, func() {
+					gl.LoadIdentity()
+
+					//gl.Hint(gl.LINES, gl.NICEST)
+					//gl.LineWidth(4)
+					/*
+						glh.With(glh.Primitive{gl.LINES}, func() {
+							gl.Color4f(1, 1, 1, 1)
+							gl.Vertex2f(-2, 0)
+							gl.Vertex2f(2, 0)
+						})
+					*/
+
+					gl.PointSize(4)
+					glh.With(glh.Matrix{gl.MODELVIEW}, func() {
+						gl.Translated(0, -2, 0)
+						gl.Scaled(1, 4/float64(block.nrecords), 1)
+
+						block.vertex_data.Draw(gl.POINTS)
+					})
+
+					/*
+						gl.Color4f(0.5, 0.5, 1, 1)
+						With(Primitive{gl.LINE_LOOP}, func() {
+							b := 0.2
+							Squared(-2.1+b, -2.1+b, 4.35-b*2, 4.2-b*2)
+						})
+					*/
+				})
+			})
+		})
+	}
+
+	//block.img = block.tex.AsImage()
+	if !block.detail_needed {
+		block.vertex_data = nil
+		runtime.GC()
+	}
 
 	blocks_rendered++
-	runtime.GC()
 }
 
 var blocks_rendered = int64(0)
 
-var loadingblock map[*Block]bool = make(map[*Block]bool)
+//var loading_texture map[*Block]bool = make(map[*Block]bool)
 
-func (block *Block) Draw(start, N int64) {
+func (block *Block) RequestTexture() {
+	block.requests.texture.Do(func() {
+		// Schedule the main thread to build our texture for us
+		go func() {
+			main_thread_work <- func() {
+				glh.With(&Timer{Name: "LoadTextures"}, func() {
+					block.BuildTexture()
+				})
+				// Allow generation once again
+				block.requests.texture = sync.Once{}
+			}
+		}()
+	})
+}
+
+func (block *Block) RequestVertices() {
+	block.requests.vertices.Do(func() {
+		// This request is processed by the file reading go-routine
+		block.full_data.detail_request <- block
+	})
+}
+
+func (block *Block) Draw(start, N int64, detailed bool) {
 	if block.tex == nil {
-		if _, loading := loadingblock[block]; !loading {
-			loadingblock[block] = true
-			go func() {
+		block.RequestTexture()
+	}
 
-				main_thread_work <- func() {
-					glh.With(&Timer{Name: "LoadTextures"}, func() {
-						block.BuildVertexData()
-					})
-					delete(loadingblock, block)
-				}
-			}()
+	switch detailed {
+	case true:
+		block.detail_needed = true
+		if block.vertex_data == nil {
+			// Hey, we need vertices but don't have them! Let's fix that..
+			block.RequestVertices()
 		}
-		return
+	default:
+		block.detail_needed = false
 	}
 
 	width := uint64(len(block.display_active_pages)) * *PAGE_SIZE
@@ -188,12 +243,9 @@ func (block *Block) Draw(start, N int64) {
 		width = 1
 	}
 
-	gl.LineWidth(1)
-
-	var vc, eolmarker glh.ColorVertices
+	var vc glh.ColorVertices
 
 	if *pageboundaries {
-
 		boundary_color := glh.Color{64, 64, 64, 255}
 
 		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
@@ -206,54 +258,75 @@ func (block *Block) Draw(start, N int64) {
 		}
 	}
 
-	c := glh.Color{255, 255, 255, 255}
-	eolmarker.Add(glh.ColorVertex{c, glh.Vertex{-2, 0}})
-	eolmarker.Add(glh.ColorVertex{c, glh.Vertex{2, 0}})
+	var border_color [4]float64
 
 	gl.LineWidth(1)
 	glh.With(&Timer{Name: "DrawPartial"}, func() {
 		var x1, y1, x2, y2 float64
 		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
+			// TODO: A little less co-ordinate insanity?
 			gl.Translated(0, -2, 0)
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, -float64(start), 0)
 
-			//gl.Color4f(0.5, 0, 0, 0.2)
-			//DrawQuadi(-2, 0, 4, int(N))
-
-			gl.PointSize(2)
-
-			//block.vertex_data.Draw(gl.POINTS)
-
 			x1, y1 = glh.ProjToWindow(-2, 0)
-			x2, y2 = glh.ProjToWindow(-2+4, float64(N))
-
-			//_, h := GetViewportWH()
-			//log.Printf("  h = %f -- %f", y1-y2, float64(int64(h)*N/(*nback))/(2.25*2- -2.1*2)*4)
+			x2, y2 = glh.ProjToWindow(-2+WIDTH, float64(N))
 
 		})
-		glh.With(glh.WindowCoords{Invert: true}, func() {
-			gl.Color4f(1, 1, 1, 1)
-			glh.With(block.tex, func() {
-				glh.DrawQuadd(x1, y1, x2-x1, y2-y1)
-			})
+		border_color = [4]float64{1, 1, 1, 1}
 
-			/*
-				gl.Color4f(1, 1, 1, 1)
-				glh.With(glh.Primitive{gl.LINE_LOOP}, func() {
-					glh.Squared(x1, y1, x2-x1, y2-y1)
-				})
-			*/
-		})
 		glh.With(glh.Matrix{gl.MODELVIEW}, func() {
 			gl.Translated(0, -2, 0)
 			gl.Scaled(1, 4/float64(*nback), 1)
 			gl.Translated(0, -float64(start), 0)
 
+			// Page boundaries
+			// TODO: Use different blending scheme on textured quads so that the
+			//       lines show through
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Disable(gl.LINE_SMOOTH)
 				vc.Draw(gl.LINES)
-				//eolmarker.Draw(gl.LINES)
+			})
+		})
+
+		if block.tex != nil && (!detailed || block.vertex_data == nil) {
+			border_color = [4]float64{0, 0, 1, 1}
+			glh.With(glh.WindowCoords{Invert: true}, func() {
+				gl.Color4f(1, 1, 1, 1)
+				// Render textured block quad
+				glh.With(block.tex, func() {
+					glh.DrawQuadd(x1, y1, x2-x1, y2-y1)
+				})
+				glh.With(glh.Primitive{gl.LINES}, func() {
+					glh.Squared(x1, y1, x2-x1, y2-y1)
+				})
+			})
+			if block.vertex_data != nil && !block.detail_needed {
+				// TODO: figure out when we can unload
+				// Hey, we can unload you, because you are not needed
+				block.vertex_data = nil
+			}
+
+		}
+		if detailed && block.vertex_data != nil {
+			glh.With(glh.Matrix{gl.MODELVIEW}, func() {
+				// TODO: A little less co-ordinate insanity?
+				gl.Translated(0, -2, 0)
+				gl.Scaled(1, 4/float64(*nback), 1)
+				gl.Translated(0, -float64(start), 0)
+
+				gl.PointSize(2)
+				block.vertex_data.Draw(gl.POINTS)
+			})
+		}
+
+		glh.With(glh.WindowCoords{Invert: true}, func() {
+			// Block boundaries
+			gl.Color4dv(&border_color)
+
+			gl.LineWidth(1)
+			glh.With(glh.Primitive{gl.LINE_LOOP}, func() {
+				glh.Squared(x1, y1, x2-x1, y2-y1)
 			})
 		})
 	})
@@ -265,9 +338,6 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 
 	vc := &glh.ColorVertices{}
 
-	// TODO: Transport vertices to the GPU in bulk using glBufferData
-	//	   Function calls here appear to be the biggest bottleneck
-	// 		OTOH, this might not be supported on older cards
 	var stack_depth int = len(block.context_records)
 
 	for pos := int64(0); pos < int64(block.nrecords); pos++ {
@@ -326,6 +396,10 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 			}
 		*/
 	}
+
+	// Don't need the record data anymore
+	block.records = Records{}
+	runtime.GC()
 
 	return vc
 }

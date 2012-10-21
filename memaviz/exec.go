@@ -19,6 +19,7 @@ import (
 type MemRegion struct {
 	low, hi                             uint64
 	perms, offset, dev, inode, pathname string
+	data                                *ProgramData
 }
 
 func (r *MemRegion) String() string {
