@@ -7,9 +7,9 @@ import (
 	"sort"
 
 	"github.com/JohannesEbke/go-stree/stree"
-	"github.com/banthar/gl"
 
-	glh "github.com/pwaller/go-glhelpers"
+	"github.com/go-gl/gl"
+	"github.com/go-gl/glh"
 )
 
 type Block struct {

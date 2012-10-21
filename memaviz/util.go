@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/banthar/gl"
+	"github.com/go-gl/gl"
 )
 
 import (
@@ -40,7 +40,7 @@ func Capture() {
 	// TODO: co-ordinates, filename, cleverness to stitch many together
 	im := image.NewNRGBA(image.Rect(0, 0, 400, 400))
 	gl.ReadBuffer(gl.BACK_LEFT)
-	gl.ReadPixels(0, 0, 400, 400, gl.RGBA, im.Pix)
+	gl.ReadPixels(0, 0, 400, 400, gl.RGBA, gl.UNSIGNED_BYTE, im.Pix)
 
 	fd, err := os.Create("test.png")
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	glh "github.com/pwaller/go-glhelpers"
 	"github.com/pwaller/go-memhelper"
 
 	"github.com/pwaller/go-chart"
@@ -17,7 +16,8 @@ import (
 	"github.com/pwaller/go-chart/svgg"
 	"image/color"
 
-	"github.com/banthar/gl"
+	"github.com/go-gl/gl"
+	"github.com/go-gl/glh"
 )
 
 // type StatusHUDValue struct {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/pwaller/go-clz4"
 
-	glh "github.com/pwaller/go-glhelpers"
+	"github.com/go-gl/glh"
 )
 
 type ProgramData struct {

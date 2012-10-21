@@ -11,10 +11,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/banthar/gl"
-	"github.com/jteeuwen/glfw"
-
-	glh "github.com/pwaller/go-glhelpers"
+	"github.com/go-gl/gl"
+	"github.com/go-gl/glfw"
+	"github.com/go-gl/glh"
 
 	"net/http"
 	_ "net/http/pprof"
