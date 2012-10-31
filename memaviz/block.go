@@ -349,6 +349,9 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 	x, y := &vertex[0], &vertex[1]
 	r, g, b := &colour[0], &colour[1], &colour[2]
 
+	vertices := make([]float32, 0, block.nrecords*2)
+	colours := make([]uint8, 0, block.nrecords*3)
+
 	for pos := int64(0); pos < int64(block.nrecords); pos++ {
 		if pos < 0 {
 			continue
@@ -363,7 +366,10 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 			*x = 2 + float32(stack_depth)/80.
 			*y = float32(pos) //int64(len(*vc)))
 			*r, *g, *b = 64, 64, 255
-			vc.Add(vertex, colour)
+
+			vertices = append(vertices, *x, *y)
+			colours = append(colours, *r, *g, *b)
+			//vc.Add(vertex, colour)
 			//c := color.RGBA{64, 64, 255, 255}
 			//vc.Add(glh.ColorVertex{c, glh.Vertex{, y}})
 
@@ -373,7 +379,9 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 			*x = 2 + float32(stack_depth)/80.
 			*y = float32(pos) //int64(len(*vc)))
 			*r, *g, *b = 255, 64, 64
-			vc.Add(vertex, colour)
+			vertices = append(vertices, *x, *y)
+			colours = append(colours, *r, *g, *b)
+			//vc.Add(vertex, colour)
 			//y := float32(int64(len(*vc)))
 			//c := color.RGBA{255, 64, 64, 255}
 			//vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
@@ -401,6 +409,9 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 		*y = float32(pos) //len(*vc))
 		*r, *g, *b = uint8(a.IsWrite)*255, uint8(1-a.IsWrite)*255, 0
 
+		vertices = append(vertices, *x, *y)
+		colours = append(colours, *r, *g, *b)
+
 		//vc.Add(vertex, colour)
 
 		//c := color.RGBA{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
@@ -416,6 +427,7 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 		*/
 	}
 
+	vc.Add(vertices, colours)
 	// Don't need the record data anymore
 	block.records = Records{}
 	runtime.GC()
