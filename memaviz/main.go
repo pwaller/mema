@@ -80,6 +80,7 @@ func DoneThisFrame(value WorkType) bool {
 func main_loop(data *ProgramData) {
 	start := time.Now()
 	frames := 0
+	lastblocks := 0
 
 	// Frame counter
 	go func() {
@@ -89,8 +90,11 @@ func main_loop(data *ProgramData) {
 				memstats := new(runtime.MemStats)
 				runtime.ReadMemStats(memstats)
 				fps := float64(frames) / time.Since(start).Seconds()
-				log.Printf("fps = %5.2f; blocks = %4d; sparemem = %6d MB; alloc'd = %6.6f; (+footprint = %6.6f)",
-					fps, len(data.blocks), SpareRAM(), float64(memstats.Alloc)/1024/1024,
+				blocks := len(data.blocks)
+				bps := float64(blocks-lastblocks) / time.Since(start).Seconds()
+				lastblocks = blocks
+				log.Printf("fps = %5.2f; blocks = %4d; bps = %5.2f sparemem = %6d MB; alloc'd = %6.6f; (+footprint = %6.6f)",
+					fps, len(data.blocks), bps, SpareRAM(), float64(memstats.Alloc)/1024/1024,
 					float64(memstats.Sys-memstats.Alloc)/1024/1024)
 
 				PrintTimers(frames)

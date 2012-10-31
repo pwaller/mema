@@ -19,7 +19,7 @@ type Block struct {
 	detail_needed   bool
 	records         Records
 	context_records Records
-	vertex_data     *glh.ColorVertices
+	vertex_data     *glh.MeshBuffer
 
 	quiet_pages, active_pages, display_active_pages map[uint64]bool
 	n_pages_to_left, n_inactive_to_left             map[uint64]uint64
@@ -172,7 +172,7 @@ func (block *Block) BuildTexture() {
 						gl.Translated(0, -2, 0)
 						gl.Scaled(1, 4/float64(block.nrecords), 1)
 
-						block.vertex_data.Draw(gl.POINTS)
+						block.vertex_data.Render(gl.POINTS)
 					})
 
 					/*
@@ -316,7 +316,7 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 				gl.Translated(0, -float64(start), 0)
 
 				gl.PointSize(2)
-				block.vertex_data.Draw(gl.POINTS)
+				block.vertex_data.Render(gl.POINTS)
 			})
 		}
 
@@ -332,61 +332,91 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 	})
 }
 
-func (block *Block) GenerateVertices() *glh.ColorVertices {
+func (block *Block) GenerateVertices() *glh.MeshBuffer {
 
 	width := uint64(len(block.display_active_pages)+1) * *PAGE_SIZE
 
-	vc := &glh.ColorVertices{}
+	vc := glh.NewMeshBuffer(
+		glh.RenderArrays,
+		glh.NewPositionAttr(2, gl.FLOAT, gl.STATIC_DRAW),
+		glh.NewColorAttr(3, gl.UNSIGNED_BYTE, gl.STATIC_DRAW),
+	)
 
 	var stack_depth int = len(block.context_records)
+
+	vertex := []float32{0, 0}
+	colour := []uint8{0, 0, 0}
+	x, y := &vertex[0], &vertex[1]
+	r, g, b := &colour[0], &colour[1], &colour[2]
+
+	vertices := make([]float32, 0, block.nrecords*2)
+	colours := make([]uint8, 0, block.nrecords*3)
 
 	for pos := int64(0); pos < int64(block.nrecords); pos++ {
 		if pos < 0 {
 			continue
 		}
 
-		r := &block.records[pos]
-		if r.Type == MEMA_ACCESS {
+		rec := &block.records[pos]
+		if rec.Type == MEMA_ACCESS {
 			// take it
-		} else if r.Type == MEMA_FUNC_ENTER {
+		} else if rec.Type == MEMA_FUNC_ENTER {
 			stack_depth++
 
-			y := float32(int64(len(*vc)))
-			c := color.RGBA{64, 64, 255, 255}
-			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
+			*x = 2 + float32(stack_depth)/80.
+			*y = float32(pos) //int64(len(*vc)))
+			*r, *g, *b = 64, 64, 255
+
+			vertices = append(vertices, *x, *y)
+			colours = append(colours, *r, *g, *b)
+			//vc.Add(vertex, colour)
+			//c := color.RGBA{64, 64, 255, 255}
+			//vc.Add(glh.ColorVertex{c, glh.Vertex{, y}})
 
 			continue
-		} else if r.Type == MEMA_FUNC_EXIT {
+		} else if rec.Type == MEMA_FUNC_EXIT {
 
-			y := float32(int64(len(*vc)))
-			c := color.RGBA{255, 64, 64, 255}
-			vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
+			*x = 2 + float32(stack_depth)/80.
+			*y = float32(pos) //int64(len(*vc)))
+			*r, *g, *b = 255, 64, 64
+			vertices = append(vertices, *x, *y)
+			colours = append(colours, *r, *g, *b)
+			//vc.Add(vertex, colour)
+			//y := float32(int64(len(*vc)))
+			//c := color.RGBA{255, 64, 64, 255}
+			//vc.Add(glh.ColorVertex{c, glh.Vertex{2 + float32(stack_depth)/80., y}})
 
 			stack_depth--
 
 			continue
 		} else {
-			log.Panic("Unexpected record type: ", r.Type)
+			log.Panic("Unexpected record type: ", rec.Type)
 		}
-		a := r.MemAccess()
+		a := rec.MemAccess()
 
 		page := a.Addr / *PAGE_SIZE
 		if _, present := block.quiet_pages[page]; present {
 			continue
 		}
 
-		x := float32((a.Addr - block.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
-		x = (x - 0.5) * 4
+		*x = float32((a.Addr - block.n_inactive_to_left[page]*(*PAGE_SIZE))) / float32(width)
+		*x = (*x - 0.5) * 4
 
-		if x > 4 || x < -4 {
+		if *x > 4 || *x < -4 {
 			log.Panic("x has unexpected value: ", x)
 		}
 
-		y := float32(len(*vc))
+		*y = float32(pos) //len(*vc))
+		*r, *g, *b = uint8(a.IsWrite)*255, uint8(1-a.IsWrite)*255, 0
 
-		c := color.RGBA{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
+		vertices = append(vertices, *x, *y)
+		colours = append(colours, *r, *g, *b)
 
-		vc.Add(glh.ColorVertex{c, glh.Vertex{x, y}})
+		//vc.Add(vertex, colour)
+
+		//c := color.RGBA{uint8(a.IsWrite) * 255, uint8(1-a.IsWrite) * 255, 0, 255}
+
+		//vc.Add(glh.ColorVertex{c, glh.Vertex{x, y}})
 
 		/*
 			TODO: Reintroduce 'recently hit memory locations'
@@ -397,6 +427,7 @@ func (block *Block) GenerateVertices() *glh.ColorVertices {
 		*/
 	}
 
+	vc.Add(vertices, colours)
 	// Don't need the record data anymore
 	block.records = Records{}
 	runtime.GC()
