@@ -2,7 +2,6 @@ package main
 
 import (
 	"image"
-	"image/color"
 	"log"
 	"runtime"
 	"sort"
@@ -81,7 +80,7 @@ func (block *Block) ActiveRegionIDs() {
 		}
 	}
 
-	// Populate the "quiet pages" map (less than 1% of the activity of the 
+	// Populate the "quiet pages" map (less than 1% of the activity of the
 	// most active page)
 	for page, value := range page_activity {
 		if *hide_qp_fraction != 0 &&
@@ -243,19 +242,32 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 		width = 1
 	}
 
-	var vc glh.ColorVertices
+	//var vc glh.ColorVertices
+	boundarymesh := glh.NewMeshBuffer(glh.RenderArrays,
+		glh.NewPositionAttr(2, gl.FLOAT, gl.STREAM_DRAW),
+		glh.NewColorAttr(4, gl.UNSIGNED_BYTE, gl.STREAM_DRAW),
+	)
+
+	boundarymesh.Clear()
 
 	if *pageboundaries {
-		boundary_color := color.RGBA{64, 64, 64, 255}
+		//boundary_color := []uint8{64, 64, 64, 255}
 
-		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
-			for p := uint64(0); p <= width; p += *PAGE_SIZE {
-				x := float32(p) / float32(width)
-				x = (x - 0.5) * 4
-				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, 0}})
-				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, float32(N)}})
+		/*
+			vertices := boundarymesh.Positions().DataPtr().(*[]float32)
+			colors := boundarymesh.Colors().DataPtr().(*[]uint8)
+
+			if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
+				for p := uint64(0); p <= width; p += *PAGE_SIZE {
+					x := float32(p) / float32(width)
+					x = (x - 0.5) * 4
+					*vertices = append(*vertices, x, 0, x, float32(N))
+					*colors = append(*colors, boundary_color...)
+					//vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, 0}})
+					//vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, float32(N)}})
+				}
 			}
-		}
+		*/
 	}
 
 	var border_color [4]float64
@@ -285,7 +297,7 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 			//       lines show through
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Disable(gl.LINE_SMOOTH)
-				vc.Draw(gl.LINES)
+				boundarymesh.Render(gl.LINES)
 			})
 		})
 
