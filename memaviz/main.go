@@ -392,6 +392,9 @@ func main() {
 		cleanup := make_window(1280, 768, "Memory Accesses")
 		defer cleanup()
 
+		b := gl.GenBuffer()
+		_ = b
+
 		InitStatsHUD()
 		main_loop(data)
 	case "pack":
