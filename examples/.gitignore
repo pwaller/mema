@@ -1,0 +1,5 @@
+*.mema
+*.mema.*
+
+bubble/bubble
+stdsort/stdsort
