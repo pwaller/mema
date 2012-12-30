@@ -1,0 +1,28 @@
+Index: Makefile.am
+===================================================================
+--- Makefile.am	(Revision 13214)
++++ Makefile.am	(Arbeitskopie)
+@@ -10,7 +10,8 @@
+ 		lackey \
+ 		none \
+ 		helgrind \
+-		drd
++		drd \
++		memadump
+ 
+ EXP_TOOLS = 	exp-sgcheck \
+ 		exp-bbv \
+Index: configure.in
+===================================================================
+--- configure.in	(Revision 13214)
++++ configure.in	(Arbeitskopie)
+@@ -2527,6 +2527,9 @@
+    drd/Makefile
+    drd/scripts/download-and-build-splash2
+    drd/tests/Makefile
++   memadump/Makefile
++   memadump/docs/Makefile
++   memadump/tests/Makefile
+    exp-bbv/Makefile
+    exp-bbv/tests/Makefile
+    exp-bbv/tests/x86/Makefile
