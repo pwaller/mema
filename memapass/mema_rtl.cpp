@@ -164,11 +164,11 @@ static bool mema_initialized = false;
 const unsigned int bufsize_MB = 10;
 const unsigned int mem_accesses_bufsize = bufsize_MB*1024*1024 / sizeof(MemAccess);
 
-__thread static bool thread_initialized = false;
-__thread static bool inside_mema = false;
+static __thread bool thread_initialized = false;
+static __thread bool inside_mema = false;
 
-__thread static MemAccess mem_accesses[mem_accesses_bufsize];
-__thread static MemAccess  *first_mem_access = NULL,
+static __thread MemAccess mem_accesses[mem_accesses_bufsize];
+static __thread MemAccess  *first_mem_access = NULL,
                            *next_free_mem_access = NULL,
                            *last_mem_access = NULL;
 
@@ -192,8 +192,8 @@ unsigned long total_uncompressed_size = 0;
 unsigned long total_compressed_size = 0;
 
 static std::set<uptr> monitor_func_addresses;
-__thread static bool monitor_func = false;
-__thread static int monitor_func_entry_count = 0;
+static __thread bool monitor_func = false;
+static __thread int monitor_func_entry_count = 0;
 
 // This function can be run in multiple threads simultaneously.
 void __mema_empty_buffer() {
