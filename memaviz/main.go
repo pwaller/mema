@@ -120,6 +120,7 @@ func main_loop(data *ProgramData) {
 
 	var i int64 = -int64(*nback)
 
+	glh.MustInitText()
 	text := glh.MakeText(data.filename, 32)
 
 	// Location of mouse in record space

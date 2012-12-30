@@ -122,7 +122,6 @@ func (block *Block) ActiveRegionIDs() {
 
 func (block *Block) BuildTexture() {
 	block.tex = glh.NewTexture(1024, 256)
-	block.tex.Init()
 
 	// TODO: use runtime.SetFinalizer() to clean up/delete the texture?
 	glh.With(block.tex, func() {
@@ -135,10 +134,12 @@ func (block *Block) BuildTexture() {
 		// TODO: Only try and activate anisotropic filtering if it is available
 
 		gl.TexParameterf(gl.TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, MaxAnisotropy)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, 1)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, 3)
 	})
+	
+	block.tex.Init()
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		glh.With(&glh.Framebuffer{Texture: block.tex, Level: i}, func() {
 			glh.With(glh.Attrib{gl.COLOR_BUFFER_BIT}, func() {
 				gl.ClearColor(1, 0, 0, 0)
