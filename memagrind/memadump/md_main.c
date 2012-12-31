@@ -173,6 +173,8 @@
 #include "pub_tool_machine.h"     // VG_(fnptr_to_fnentry)
 #include "pub_tool_vki.h"
 #include "pub_tool_libcfile.h"
+#include <pub_tool_mallocfree.h>
+#include "lz4.h"
 
 typedef Long uptr;
 
@@ -321,11 +323,11 @@ static void __mema_empty_buffer(void) {
     pages.insert(mem_accesses[i].acc.addr / sysconf(_SC_PAGESIZE));
   }*/
   
-  /*if (flags()->compression) {
+  if (1) {//flags()->compression) {
     // TODO: use statically allocated memory for `compressed` and `compressed1`
 
     SizeT len = LZ4_compressBound(uncompressed_size);
-    char * compressed = new char[len];
+    char * compressed = (char*) VG_(calloc)("mema_c0",len, sizeof(char));
     SizeT compressed_size = 0;
     
     compressed_size = LZ4_compress(
@@ -333,49 +335,46 @@ static void __mema_empty_buffer(void) {
       compressed, uncompressed_size);
     
     SizeT len1 = LZ4_compressBound(compressed_size);
-    char * compressed1 = new char[len1];
+    char * compressed1 = (char*) VG_(calloc)("mema_c1",len1, sizeof(char));
     SizeT compressed_size1 = 0;
     compressed_size1 = LZ4_compress(compressed, compressed1, compressed_size);
     
-    {
-      Lock l(&write_mutex);
-
-      uptr r = write(outputfile_fd, 
-        reinterpret_cast<void *>(&compressed_size1),
+      uptr r = VG_(write)(outputfile_fd, 
+        (void*)(&compressed_size1),
         sizeof(compressed_size));
                      
-      uptr r1 = write(outputfile_fd, compressed1, compressed_size1);
+      uptr r1 = VG_(write)(outputfile_fd, compressed1, compressed_size1);
 
       total_uncompressed_size += sizeof(compressed_size) + uncompressed_size;
       total_compressed_size += sizeof(compressed_size) + compressed_size1;
 
       if ((SizeT)r1 != compressed_size1) {
-        printf("Failure: %zd != %zd\n", r1, compressed_size1);
+        VG_(printf)("Failure: %ld != %ld\n", r1, compressed_size1);
       }
       
-      assert((SizeT)r1 == compressed_size1);
-    }
+      tl_assert((SizeT)r1 == compressed_size1);
     
     //Report("memaccess: Compressed size: %d (max %d) %p %p\n", compressed_size, len, r, r1);
     //PrintBytes("  ", (uptr*)(compressed+0*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+1*kWordSize));
     //PrintBytes("  ", (uptr*)(compressed+2*kWordSize));
-    delete compressed1;
-    delete compressed;
+    VG_(free)(compressed);
+    VG_(free)(compressed1);
     
-    if (flags()->debug && flags()->verbosity > 0)              
-      printf("memaccess: Emptying memaccess buffer, uncompressed = %zd compressed = %zd compressed1 = %zd\n", 
+    VG_(printf)("memaccess: Emptying memaccess buffer, uncompressed = %ld compressed = %ld compressed1 = %ld\n", 
              uncompressed_size, compressed_size, compressed_size1);
-  } else {*/
+  } else {
 
     uptr r = VG_(write)(outputfile_fd, 
       (const void *)(&uncompressed_size),
       sizeof(uncompressed_size));
                    
     uptr r1 = VG_(write)(outputfile_fd, uncompressed_data, uncompressed_size);
-    VG_(printf)("memaccess: Emptying memaccess buffer, uncompressed = %zd\n", 
+    VG_(printf)("memaccess: Emptying memaccess buffer, uncompressed = %ld\n", 
              uncompressed_size);
-  //}
+      total_uncompressed_size += sizeof(uncompressed_size) + uncompressed_size;
+      total_compressed_size += sizeof(uncompressed_size) + uncompressed_size;
+  }
     
   next_free_mem_access = &mem_accesses[0];
 }
@@ -386,8 +385,8 @@ static void __mema_finalize(void) {
   __mema_empty_buffer();
   if (outputfile_fd != -1)
     VG_(close)(outputfile_fd);
-  VG_(printf)("Total bytes written (compressed)  : %li\n", total_compressed_size);
-  VG_(printf)("Total bytes written (uncompressed): %li\n", total_uncompressed_size);
+  VG_(printf)("Total bytes written (compressed)  : %ld\n", total_compressed_size);
+  VG_(printf)("Total bytes written (uncompressed): %ld\n", total_uncompressed_size);
 }
 
 
@@ -624,17 +623,44 @@ static VG_REGPARM(2) void trace_instr(Addr addr, SizeT size)
 
 static VG_REGPARM(2) void trace_load(Addr addr, SizeT size)
 {
-   VG_(printf)(" L %08lx,%lu\n", addr, size);
+   MemAccess * f = next_free_mem_access++;
+   f->type = MEMA_DATA_READ;
+   //f->acc.time = tv.tv_sec + (0.000001 * tv.tv_usec);
+   //f->acc.pc = pc; f->acc.bp = bp; f->acc.sp = sp;
+   f->acc.addr = addr;
+   f->acc.size = size;
+
+   if (next_free_mem_access == last_mem_access) {
+        __mema_empty_buffer();
+    }
 }
 
 static VG_REGPARM(2) void trace_store(Addr addr, SizeT size)
 {
-   VG_(printf)(" S %08lx,%lu\n", addr, size);
+   MemAccess * f = next_free_mem_access++;
+   f->type = MEMA_DATA_WRITE;
+   //f->acc.time = tv.tv_sec + (0.000001 * tv.tv_usec);
+   //f->acc.pc = pc; f->acc.bp = bp; f->acc.sp = sp;
+   f->acc.addr = addr;
+   f->acc.size = size;
+
+   if (next_free_mem_access == last_mem_access) {
+        __mema_empty_buffer();
+    }
 }
 
 static VG_REGPARM(2) void trace_modify(Addr addr, SizeT size)
 {
-   VG_(printf)(" M %08lx,%lu\n", addr, size);
+   MemAccess * f = next_free_mem_access++;
+   f->type = MEMA_DATA_MODIFY;
+   //f->acc.time = tv.tv_sec + (0.000001 * tv.tv_usec);
+   //f->acc.pc = pc; f->acc.bp = bp; f->acc.sp = sp;
+   f->acc.addr = addr;
+   f->acc.size = size;
+
+   if (next_free_mem_access == last_mem_access) {
+        __mema_empty_buffer();
+    }
 }
 
 
@@ -755,7 +781,7 @@ void addEvent_Dw ( IRSB* sb, IRAtom* daddr, Int dsize )
 
 static void trace_superblock(Addr addr)
 {
-   VG_(printf)("SB %08lx\n", addr);
+   //VG_(printf)("SB %08lx\n", addr);
 }
 
 
