@@ -6,14 +6,13 @@
 
 int main(int argc, char* argv[]) {
     
-    int arr[100] = {0};
+	size_t N = argc < 2 ? 1000 : atoi(argv[1]);
+	
     
-    size_t N = sizeof(arr)/sizeof(arr[0]);
+    int *arr = new int[N];
     
     for (int i = 0; i < N; i++)
         arr[i] = random();
-    
-    //std::sort(arr, arr+N);
     
     for (int i = 0; i < N; i++)
     for (int j = i; j < N; j++) {
@@ -21,6 +20,8 @@ int main(int argc, char* argv[]) {
             std::swap(arr[i], arr[j]);
         }
     }
+    
+    std::cout << "Bubble sorted " << N << " elements" << std::endl;
     
     return 0;
 }

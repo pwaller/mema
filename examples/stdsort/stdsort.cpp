@@ -5,13 +5,8 @@
 #include <stdlib.h>
 
 int main(int argc, char* argv[]) {
-    
-	if (argc < 2) {
-		std::cout << "Usage: stdsort N" << std::endl;
-		return -1;
-	}
 	
-	size_t N = atoi(argv[1]);
+	size_t N = argc < 2 ? 1000 : atoi(argv[1]);
     
     int *arr = new int[N];
     
@@ -19,6 +14,8 @@ int main(int argc, char* argv[]) {
         arr[i] = random();
     
     std::sort(arr, arr+N);
+    
+    std::cout << "std::sorted " << N << " elements" << std::endl;
     
     return 0;
 }

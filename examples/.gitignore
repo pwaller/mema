@@ -1,5 +1,7 @@
 *.mema
 *.mema.*
 
+astar/astar
 bubble/bubble
+matrixmul/matrixmul
 stdsort/stdsort
