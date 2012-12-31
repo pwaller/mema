@@ -179,7 +179,7 @@ Matrix<T> Matrix<T>::operator*(const Matrix<T>& other) {
 #endif
  
 int main() {
-	const int N = 400;
+    const int N = 50;
 
     int  am[N][N] = {};
     int  bm[N][N] = {};

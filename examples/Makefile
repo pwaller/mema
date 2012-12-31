@@ -1,7 +1,7 @@
 .PHONY: all clean
 .DEFAULT: all
 
-N?=10000
+N?=5000
 CXX?=clang++
 CXXFLAGS?=
 LDFLAGS?=
@@ -11,11 +11,11 @@ TARGETS=$(SOURCES:.cpp=)
 
 all: $(TARGETS) run
 
-$(TARGETS): $(SOURCES)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $@.cpp -o $@
-
 run: $(TARGETS)
-	for f in $^; do echo --- $$f && time ./$$f $(N); done
+	for f in $^; do \
+	echo --- $$f; \
+	MEMA_OPTIONS=filename=$${f}.mema time ./$$f $(N); \
+	done;
 
 clean:
 	rm -f $(TARGETS)
