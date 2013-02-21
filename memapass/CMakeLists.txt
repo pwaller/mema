@@ -17,7 +17,9 @@ link_directories(${LLVM_LIBRARY_DIRS})
 
 add_library(memartl SHARED
   mema_rtl.cpp
+  mema_malloc.cpp
   lz4.c
+  interception_linux.cc
   ${PROTO_SRC}
 )
 
