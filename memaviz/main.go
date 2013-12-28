@@ -120,7 +120,8 @@ func main_loop(data *ProgramData) {
 
 	var i int64 = -int64(*nback)
 
-	text := glh.MakeText(data.filename, 32)
+	// TODO(pwaller): Make this work again
+	// text := glh.MakeText(data.filename, 32)
 
 	// Location of mouse in record space
 	var rec, rec_actual int64 = 0, 0
@@ -285,7 +286,7 @@ func main_loop(data *ProgramData) {
 
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Enable(gl.TEXTURE_2D)
-				text.Draw(0, 0)
+				// text.Draw(0, 0)
 				for text_idx := range stacktext {
 					stacktext[text_idx].Draw(int(w*0.55), int(h)-35-text_idx*16)
 				}
@@ -313,7 +314,7 @@ func main_loop(data *ProgramData) {
 		// gl.Color4f(1, 1, 1, 0.25)
 		// DrawQuadd(-2.1, -2.25, 4.4, 2.1 - -2.25)
 
-		StatsHUD()
+		// StatsHUD()
 	}
 
 	interrupt := make(chan os.Signal)
@@ -395,7 +396,7 @@ func main() {
 		InitStatsHUD()
 		main_loop(data)
 	case "pack":
-		data.PackBinaries()
+		// data.PackBinaries()
 
 	default:
 		log.Fatal("Unknown action: %q", action)
