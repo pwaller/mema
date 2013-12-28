@@ -17,14 +17,15 @@
 #include "llvm/PassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
-#include "llvm/Module.h"
-#include "llvm/Function.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
 
-#include "llvm/IntrinsicInst.h"
-#include "llvm/Type.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Type.h"
 
-#include "llvm/Target/TargetData.h"
-#include "llvm/Target/TargetMachine.h"
+// TODO(pwaller): it has been renamed to DataLayout
+// #include "llvm/Target/TargetData.h"
+// #include "llvm/Target/TargetMachine.h"
 
 #include "llvm/Support/raw_ostream.h"
 
@@ -34,7 +35,7 @@
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR < 2
   #include "llvm/Support/IRBuilder.h"
 #else
-  #include "llvm/IRBuilder.h"
+  #include "llvm/IR/IRBuilder.h"
 #endif
 
 #include "llvm/Transforms/Utils/ModuleUtils.h"
@@ -67,7 +68,7 @@ namespace {
     //virtual const char *getPassName() const { return "Hello"; }
 
     LLVMContext * C;
-    TargetData * TD;
+    DataLayout * TD;
     int LongSize;
     Type * IntptrTy;
     
@@ -78,7 +79,7 @@ namespace {
     Instruction *CtorInsertBefore;
 
     virtual bool runOnModule(Module &M) {
-      TD = getAnalysisIfAvailable<TargetData>();
+      TD = getAnalysisIfAvailable<DataLayout>();
       if (!TD) return false;
       C = &(M.getContext());
       LongSize = TD->getPointerSizeInBits();

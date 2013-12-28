@@ -13,7 +13,7 @@ INTERCEPTOR(void*, malloc, uptr size) {
 
 DECLARE_REAL(void, free, void*)
 INTERCEPTOR(void, free, void* addr) {
-  printf("Calling free: ptr=%p\n", addr);
+  // printf("Calling free: ptr=%p\n", addr);
   REAL(free)(addr);
 }
 
