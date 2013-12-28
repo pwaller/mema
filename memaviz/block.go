@@ -2,7 +2,7 @@ package main
 
 import (
 	"image"
-	"image/color"
+	// "image/color"
 	"log"
 	"runtime"
 	"sort"
@@ -81,7 +81,7 @@ func (block *Block) ActiveRegionIDs() {
 		}
 	}
 
-	// Populate the "quiet pages" map (less than 1% of the activity of the 
+	// Populate the "quiet pages" map (less than 1% of the activity of the
 	// most active page)
 	for page, value := range page_activity {
 		if *hide_qp_fraction != 0 &&
@@ -243,17 +243,30 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 		width = 1
 	}
 
-	var vc glh.ColorVertices
+	vc := glh.NewMeshBuffer(glh.RenderArrays,
+		glh.NewPositionAttr(2, gl.FLOAT, gl.STATIC_DRAW),
+		glh.NewPositionAttr(4, gl.UNSIGNED_INT, gl.STATIC_DRAW),
+	)
+
+	colors := make([]int32, 0)
+	positions := make([]float32, 0)
+
+	// var vc glh.ColorVertices
 
 	if *pageboundaries {
-		boundary_color := color.RGBA{64, 64, 64, 255}
+		// boundary_color := color.RGBA{64, 64, 64, 255}
 
-		if width / *PAGE_SIZE < 10000 { // If we try and draw too many of these, X will hang
+		// If we try and draw too many of these, X will hang
+		if width / *PAGE_SIZE < 10000 {
 			for p := uint64(0); p <= width; p += *PAGE_SIZE {
 				x := float32(p) / float32(width)
 				x = (x - 0.5) * 4
-				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, 0}})
-				vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, float32(N)}})
+
+				colors = append(colors, 64, 64, 64, 255)
+				positions = append(positions, x, float32(N))
+
+				// vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, 0}})
+				// vc.Add(glh.ColorVertex{boundary_color, glh.Vertex{x, float32(N)}})
 			}
 		}
 	}
@@ -285,7 +298,8 @@ func (block *Block) Draw(start, N int64, detailed bool) {
 			//       lines show through
 			glh.With(glh.Attrib{gl.ENABLE_BIT}, func() {
 				gl.Disable(gl.LINE_SMOOTH)
-				vc.Draw(gl.LINES)
+				// vc.Draw(gl.LINES)
+				vc.Render(gl.LINES)
 			})
 		})
 

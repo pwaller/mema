@@ -111,7 +111,7 @@ func (data *ProgramData) ParsePageTable(reader *bufio.Reader) {
 var nblocks = int64(0)
 
 func (data *ProgramData) ParseBlocks(reader io.ReadSeeker) {
-	// These buffers must have a maximum capacity which can fit whatever we 
+	// These buffers must have a maximum capacity which can fit whatever we
 	// throw at them, and the rounds must have an initial length so that
 	// the first byte can be addressed.
 
