@@ -148,11 +148,12 @@
 #  define S32		__int32
 #  define U64		unsigned __int64
 #else
-#  define BYTE	vki_uint8_t
-#  define U16		vki_uint16_t
-#  define U32		vki_uint32_t
-#  define S32		vki_int32_t
-#  define U64		vki_uint64_t
+#include <stdint.h>
+#  define BYTE	uint8_t
+#  define U16		uint16_t
+#  define U32		uint32_t
+#  define S32		int32_t
+#  define U64		uint64_t
 #endif
 
 #ifndef LZ4_FORCE_UNALIGNED_ACCESS
