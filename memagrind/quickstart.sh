@@ -19,7 +19,8 @@ tar xf ${P}.tar.bz2
 
 pushd ${P}
 cp -sr ${PWD}/../memadump .
-patch < ../valgrind.patch
+patch -p0 < ../valgrind.patch
+patch -p1 < ../valgrind-dont-include-a-out-header.patch
 ./autogen.sh
 
 mkdir build
