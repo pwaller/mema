@@ -827,11 +827,6 @@ IRSB* md_instrument ( VgCallbackClosure* closure,
    UInt       ilen = 0;
    Bool       condition_inverted = False;
 
-   if (gWordTy != hWordTy) {
-      /* We don't currently support this case. */
-      VG_(tool_panic)("host/guest word size mismatch");
-   }
-
    /* Set up SB */
    sbOut = deepCopyIRSBExceptStmts(sbIn);
 
