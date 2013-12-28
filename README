@@ -1,0 +1,35 @@
+File format
+===========
+
+- Magic number "MEMACCES"
+
+- The content of /proc/self/maps on initialization.
+// TODO: Updates to said maps?
+
+- LZ4 compressed blocks
+// TODO: Detail of contents of said blocks
+
+```c++
+typedef enum {
+  MEMA_INST_READ = 0,
+  MEMA_DATA_READ = 1,
+  MEMA_DATA_WRITE = 2,
+  MEMA_DATA_MODIFY = 3,
+  MEMA_FUNC_ENTER = 4,
+  MEMA_FUNC_EXIT = 5
+} MemaRecordType;
+
+typedef struct {
+  MemaRecordType type;
+  union {
+    struct {
+      double time;
+      uptr pc, bp, sp, addr;
+      SizeT size;
+    } acc;
+    struct {
+      uptr addr;
+    } func;
+  };
+} MemAccess;
+```
