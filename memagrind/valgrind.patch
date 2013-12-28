@@ -1,7 +1,7 @@
 Index: Makefile.am
 ===================================================================
---- Makefile.am	(Revision 13214)
-+++ Makefile.am	(Arbeitskopie)
+--- Makefile.am (Revision 13214)
++++ Makefile.am (Arbeitskopie)
 @@ -10,7 +10,8 @@
  		lackey \
  		none \
@@ -14,9 +14,23 @@ Index: Makefile.am
  		exp-bbv \
 Index: configure.in
 ===================================================================
---- configure.in	(Revision 13214)
-+++ configure.in	(Arbeitskopie)
-@@ -2527,6 +2527,9 @@
+--- configure.in (Revision 13214)
++++ configure.in (Arbeitskopie)
+@@ -906,6 +906,13 @@
+ 	DEFAULT_SUPP="glibc-2.34567-NPTL-helgrind.supp ${DEFAULT_SUPP}"
+ 	DEFAULT_SUPP="glibc-2.X-drd.supp ${DEFAULT_SUPP}"
+ 	;;
++     2.17)
++	AC_MSG_RESULT(2.17 family)
++	AC_DEFINE([GLIBC_2_17], 1, [Define to 1 if you're using glibc 2.17.x])
++	DEFAULT_SUPP="glibc-2.X.supp ${DEFAULT_SUPP}"
++	DEFAULT_SUPP="glibc-2.34567-NPTL-helgrind.supp ${DEFAULT_SUPP}"
++	DEFAULT_SUPP="glibc-2.X-drd.supp ${DEFAULT_SUPP}"
++	;;
+      darwin)
+ 	AC_MSG_RESULT(Darwin)
+ 	AC_DEFINE([DARWIN_LIBC], 1, [Define to 1 if you're using Darwin])
+@@ -2439,6 +2446,9 @@
     drd/Makefile
     drd/scripts/download-and-build-splash2
     drd/tests/Makefile
@@ -26,3 +40,24 @@ Index: configure.in
     exp-bbv/Makefile
     exp-bbv/tests/Makefile
     exp-bbv/tests/x86/Makefile
+Index: mpi/Makefile.am
+===================================================================
+--- mpi/Makefile.am	2012-08-17 08:59:44.000000000 +0200
++++ mpi/Makefile.am	2013-12-28 17:41:55.224099861 +0100
+@@ -46,14 +46,14 @@
+ 
+ if BUILD_MPIWRAP_PRI
+ libmpiwrap_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_SOURCES  = libmpiwrap.c
+-libmpiwrap_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_CPPFLAGS = -I../include
++libmpiwrap_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_CPPFLAGS = -I@top_srcdir@/include
+ libmpiwrap_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_CFLAGS   = \
+ 	$(CFLAGS_MPI) $(MPI_FLAG_M3264_PRI)
+ libmpiwrap_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_LDFLAGS  = $(LDFLAGS_MPI)
+ endif
+ if BUILD_MPIWRAP_SEC
+ libmpiwrap_@VGCONF_ARCH_SEC@_@VGCONF_OS@_so_SOURCES  = libmpiwrap.c
+-libmpiwrap_@VGCONF_ARCH_SEC@_@VGCONF_OS@_so_CPPFLAGS = -I../include
++libmpiwrap_@VGCONF_ARCH_SEC@_@VGCONF_OS@_so_CPPFLAGS = -I@top_srcdir@/include
+ libmpiwrap_@VGCONF_ARCH_SEC@_@VGCONF_OS@_so_CFLAGS   = \
+ 	$(CFLAGS_MPI) $(MPI_FLAG_M3264_SEC)
+ libmpiwrap_@VGCONF_ARCH_SEC@_@VGCONF_OS@_so_LDFLAGS  = $(LDFLAGS_MPI)
