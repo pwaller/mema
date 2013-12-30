@@ -443,7 +443,8 @@ func (block *Block) GenerateVertices() *glh.MeshBuffer {
 
 	vc.Add(vertices, colours)
 	// Don't need the record data anymore
-	block.records = Records{}
+	// TOOD(pwaller): figure this out
+	// block.records = Records{}
 	runtime.GC()
 
 	return vc

@@ -61,6 +61,7 @@ func (b *Block) BuildStree() (*stree.Tree, Records) {
 // Returns the stack frame for a given record id
 func (block *Block) GetStack(record int64) []*Record {
 	if block.stack_stree == nil {
+		log.Println("No stree")
 		return []*Record{}
 	}
 	intervals := (*block.stack_stree).Query(int(record), int(record))
@@ -68,12 +69,20 @@ func (block *Block) GetStack(record int64) []*Record {
 	for i := range intervals {
 		entry_indices[i] = intervals[i].Segment.From
 	}
+
 	sort.Ints(entry_indices)
+
 	result := make([]*Record, len(intervals))
 	for i := range entry_indices {
 		if entry_indices[i] < 0 {
 			result[i] = &block.context_records[-entry_indices[i]-1]
 		} else {
+			if entry_indices[i] >= len(block.records) {
+				// log.Println("Blah = ", i)
+				// log.Println("Entry_indices[i] =", entry_indices[i], len(block.records))
+				log.Println("TODO(pwaller): hack hack hack ", entry_indices[i], len(block.records))
+				continue
+			}
 			result[i] = &block.records[entry_indices[i]]
 		}
 	}
@@ -85,6 +94,11 @@ func (block *Block) GetStackNames(record int64) []string {
 	stack := block.GetStack(record)
 	result := make([]string, len(stack))
 	for i := range stack {
+		if stack[i] == nil {
+			log.Println("TODO(pwaller): remove horrific hack s = ", len(stack), i, stack[i])
+			result[i] = "unknown"
+			continue
+		}
 		f := stack[i].FunctionCall()
 		result[i] = block.GetSymbol(f.FuncPointer)
 	}

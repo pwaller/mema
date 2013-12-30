@@ -184,8 +184,9 @@ func main_loop(data *ProgramData) {
 			stacktext[j].Destroy()
 		}
 		// TODO: Load records on demand
-		if false {
+		if true {
 			stack := data.GetStackNames(rec_actual)
+			log.Println("Printing.. ", len(stack))
 			stacktext = make([]*glh.Text, len(stack))
 			for j := range stack {
 				stacktext[j] = glh.MakeText(stack[j], 32)
@@ -354,6 +355,8 @@ func FailSafe() {
 
 func main() {
 	flag.Parse()
+
+	glh.MustInitText()
 
 	log.SetFlags(log.Ltime | log.Lshortfile)
 

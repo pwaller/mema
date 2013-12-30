@@ -56,7 +56,7 @@ func GetDebugFilename(path string, file *elf.File) string {
 	}
 	// From http://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html
 	// [not checked, don't know how to get BID.]
-	// /usr/lib/debug/.build-id/ab/cdef1234.debug 
+	// /usr/lib/debug/.build-id/ab/cdef1234.debug
 	// /usr/bin/ls.debug
 	// /usr/bin/.debug/ls.debug
 	// /usr/lib/debug/usr/bin/ls.debug
@@ -189,6 +189,7 @@ func init() {
 }
 
 func (r *MemRegion) GetBinary() *Binary {
+	log.Println("Get binary ", r.String())
 	if r.pathname == "unknown" {
 		return nil
 	}
@@ -201,6 +202,8 @@ func (r *MemRegion) GetBinary() *Binary {
 }
 
 func (data *Block) GetSymbol(addr uint64) string {
+	log.Printf("Getting symbol for 0x%x", addr)
+	// log.Fatal("Here")
 	return data.full_data.GetSymbol(addr)
 }
 
@@ -210,6 +213,7 @@ func (data *ProgramData) GetSymbol(addr uint64) string {
 }
 
 func (r *MemRegion) GetSymbol(addr uint64) string {
+	log.Printf("GetSymbol(%p)", addr)
 	binary := r.GetBinary()
 	if binary == nil {
 		return "nil"

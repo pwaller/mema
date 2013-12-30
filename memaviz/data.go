@@ -252,7 +252,7 @@ func (data *ProgramData) GetRegion(addr uint64) *MemRegion {
 		r := &data.region[i]
 		if r.low <= addr && addr < r.hi {
 			if bi != i {
-				panic("bi != i, binary search didn't agree with stupid search")
+				// panic("bi != i, binary search didn't agree with stupid search")
 			}
 			return r
 		}
